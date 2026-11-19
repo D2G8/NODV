@@ -25,7 +25,15 @@ export type MetaRole =
   | "lat"
   | "botDepth";
 
-export type ColumnRole = MetaRole | "primary" | "variable" | "metadata" | "note" | "ignore";
+export type ColumnRole =
+  | MetaRole
+  | "primary"
+  | "variable"
+  | "intervalTop"
+  | "intervalBottom"
+  | "metadata"
+  | "note"
+  | "ignore";
 
 export interface ColumnMapping {
   roles: ColumnRole[];
@@ -39,6 +47,8 @@ export interface Variable {
   unit: string;
   label: string;
   derived?: boolean;
+  /** Describes how a sample was taken (e.g. a net's depth limits) rather than something measured. */
+  sampling?: boolean;
 }
 
 export interface Station {
@@ -57,6 +67,26 @@ export interface Station {
   /** Column-major sample values: data[variableIndex][sampleIndex]. NaN = missing. */
   data: Float64Array[];
   n: number;
+  /** Sample indices in the order the rows appear in the source file (data is sorted by the primary variable). */
+  fileOrder: number[];
+}
+
+/** A dataset column in source-file order: a numeric variable or a per-sample text column. */
+export type DatasetColumn = { kind: "variable"; index: number } | { kind: "note"; key: string };
+
+export interface SummaryCheck {
+  level: "warning" | "info";
+  text: string;
+}
+
+/** A plain-language reading of what a file contains, built at import time. */
+export interface FileSummary {
+  kind: string;
+  headline: string;
+  facts: { label: string; value: string }[];
+  checks: SummaryCheck[];
+  /** Variable indices that are measurements (not the depth axis or sampling descriptors). */
+  measured: number[];
 }
 
 export interface Dataset {
@@ -69,6 +99,9 @@ export interface Dataset {
   noteKeys: string[];
   /** Variable indices of a sampling interval's shallow and deep bounds (net tows, integrated samples). */
   interval?: { top: number; bottom: number };
+  /** Columns in the order they appear in the source file. */
+  columns: DatasetColumn[];
   stations: Station[];
   warnings: string[];
+  summary: FileSummary;
 }

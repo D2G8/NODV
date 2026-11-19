@@ -281,35 +281,33 @@ function StationSamples({ station }: { station: Station }) {
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: station.n }, (_, i) => i)
-              .sort((a, b) => station.data[interval.bottom][b] - station.data[interval.bottom][a])
-              .map((i) => {
-                const hasRemark = remarks.some((r) => station.notes[r]?.[i]);
-                return (
-                  <tr key={i} className={cn("border-b", hasRemark && "bg-amber-50/60")}>
-                    {ids.map((k) => (
-                      <td key={k} className="px-3 py-1 whitespace-nowrap">
-                        {station.notes[k]?.[i] || "—"}
-                      </td>
-                    ))}
-                    <td className="px-3 py-1 whitespace-nowrap">
-                      {fmtDepth(station.data[interval.bottom][i])} → {fmtDepth(station.data[interval.top][i])}
+            {station.fileOrder.map((i) => {
+              const hasRemark = remarks.some((r) => station.notes[r]?.[i]);
+              return (
+                <tr key={i} className={cn("border-b", hasRemark && "bg-amber-50/60")}>
+                  {ids.map((k) => (
+                    <td key={k} className="px-3 py-1 whitespace-nowrap">
+                      {station.notes[k]?.[i] || "—"}
                     </td>
-                    {remarks.map((k) => (
-                      <td key={k} className="px-3 py-1">
-                        {station.notes[k]?.[i] ? (
-                          <span className="flex items-start gap-1.5">
-                            <MessageSquareText className="mt-0.5 size-3 shrink-0 text-amber-600" />
-                            {station.notes[k][i]}
-                          </span>
-                        ) : (
-                          ""
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
+                  ))}
+                  <td className="px-3 py-1 whitespace-nowrap">
+                    {fmtDepth(station.data[interval.bottom][i])} → {fmtDepth(station.data[interval.top][i])}
+                  </td>
+                  {remarks.map((k) => (
+                    <td key={k} className="px-3 py-1">
+                      {station.notes[k]?.[i] ? (
+                        <span className="flex items-start gap-1.5">
+                          <MessageSquareText className="mt-0.5 size-3 shrink-0 text-amber-600" />
+                          {station.notes[k][i]}
+                        </span>
+                      ) : (
+                        ""
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

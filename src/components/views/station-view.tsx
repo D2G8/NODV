@@ -9,7 +9,7 @@ import { stationLabel } from "@/lib/odv/build";
 import { formatDate } from "@/lib/odv/dates";
 import { useFilteredStations, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { EmptyPlot, ViewToolbar } from "./view-chrome";
+import { EmptyPlot, NothingMeasured, useHasMeasurements, ViewToolbar } from "./view-chrome";
 
 const PROFILE_COLORS = ["#dc2626", "#2563eb", "#059669", "#9333ea", "#ea580c", "#0891b2"];
 
@@ -23,6 +23,7 @@ export function StationView() {
   const setShowAll = useStore((s) => s.setShowAllProfiles);
   const stations = useFilteredStations();
   const station = current !== null ? dataset.stations[current] : null;
+  const hasMeasurements = useHasMeasurements();
 
   const varIdx = useMemo(
     () =>
@@ -133,7 +134,7 @@ export function StationView() {
       <ViewToolbar>
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
           {dataset.variables.map((v, i) => {
-            if (i === dataset.primaryIndex) return null;
+            if (i === dataset.primaryIndex || v.sampling) return null;
             const pos = varIdx.indexOf(i);
             const on = pos >= 0;
             return (
@@ -171,7 +172,9 @@ export function StationView() {
         <span className="hidden md:inline">Tip: ← → keys step through stations, click a grey dot to jump to it.</span>
       </div>
       <div className="min-h-0 flex-1 p-1">
-        {varIdx.length === 0 ? (
+        {!hasMeasurements ? (
+          <NothingMeasured what="profiles" />
+        ) : varIdx.length === 0 ? (
           <EmptyPlot title="No variables selected" body="Pick one or more variables above to draw their profiles." />
         ) : (
           <Plot

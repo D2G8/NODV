@@ -11,7 +11,7 @@ import { Plot } from "@/components/plots/plot";
 import { stationLabel } from "@/lib/odv/build";
 import { COLOR_SCALES } from "@/lib/odv/colormaps";
 import { useFilteredStations, useStore } from "@/lib/store";
-import { EmptyPlot, ViewToolbar } from "./view-chrome";
+import { EmptyPlot, NothingMeasured, useHasMeasurements, ViewToolbar } from "./view-chrome";
 
 export function ScatterView() {
   const dataset = useStore((s) => s.dataset)!;
@@ -21,6 +21,7 @@ export function ScatterView() {
   const setCurrent = useStore((s) => s.setCurrent);
   const colorScale = useStore((s) => s.colorScale);
   const stations = useFilteredStations();
+  const hasMeasurements = useHasMeasurements();
 
   const xi = dataset.variables.findIndex((v) => v.key === scatter.x);
   const yi = dataset.variables.findIndex((v) => v.key === scatter.y);
@@ -99,6 +100,8 @@ export function ScatterView() {
     };
     return { data: traces, layout, count: xs.length };
   }, [dataset, stations, xi, yi, zi, current, colorScale, reverseY]);
+
+  if (!hasMeasurements) return <NothingMeasured what="a scatter plot" />;
 
   return (
     <div className="flex h-full min-h-0 flex-col">

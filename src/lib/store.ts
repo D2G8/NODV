@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import { guessSalinity, guessTemperature } from "./odv/derived";
+import { measuredIndices } from "./odv/interpret";
 import type { ImportSettings } from "./library";
 import type { ColorScaleId } from "./odv/colormaps";
 import type { ColumnMapping, Dataset, RawTable, Station } from "./odv/types";
@@ -90,7 +91,7 @@ const EMPTY_FILTER: StationFilter = { cruises: null, dateFrom: null, dateTo: nul
 
 function defaultsFor(ds: Dataset) {
   const vars = ds.variables;
-  const nonPrimary = vars.filter((_, i) => i !== ds.primaryIndex);
+  const nonPrimary = measuredIndices(ds).map((i) => vars[i]);
   const tIdx = guessTemperature(vars);
   const sIdx = guessSalinity(vars);
   const first = nonPrimary[0]?.key ?? vars[0].key;
@@ -150,8 +151,7 @@ export const useStore = create<State>((set) => ({
   setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
   setDataset: (ds, source = null) => {
     const d = defaultsFor(ds);
-    const onlyIntervals =
-      ds.interval !== undefined && ds.variables.length <= 3 && ds.variables.every((_, i) => i === ds.primaryIndex || i === ds.interval?.top || i === ds.interval?.bottom);
+    const onlyIntervals = ds.interval !== undefined && measuredIndices(ds).length === 0;
     set((s) => ({
       view: onlyIntervals ? "intervals" : s.view === "intervals" && !ds.interval ? "station" : s.view,
       intervalColor: null,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, FlaskConical, RotateCcw, Search } from "lucide-react";
+import { AlertTriangle, FlaskConical, RotateCcw, ScanSearch, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Field, VariableSelect } from "@/components/controls";
-import { stationLabel } from "@/lib/odv/build";
+import { FileSummaryPanel } from "@/components/import/file-summary";
+import { measuredIndices, stationLabel } from "@/lib/odv/build";
 import { formatDate } from "@/lib/odv/dates";
 import { addDensityVariables, guessSalinity, guessTemperature } from "@/lib/odv/derived";
 import { useFilteredStations, useStore } from "@/lib/store";
@@ -50,6 +51,7 @@ export function Sidebar() {
     return q ? stations.filter((s) => stationLabel(s).toLowerCase().includes(q)) : stations;
   }, [stations, query]);
 
+  const warningCount = dataset.summary.checks.filter((c) => c.level === "warning").length;
   const filterActive = filter.cruises !== null || filter.dateFrom !== null || filter.dateTo !== null || filter.bbox !== null;
   const inSection = new Set(sectionStations);
 
@@ -78,14 +80,28 @@ export function Sidebar() {
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Stat label="Stations" value={dataset.stations.length} />
           <Stat label="Samples" value={stats.samples} />
-          <Stat label="Variables" value={dataset.variables.length} />
+          <Stat label="Measured" value={measuredIndices(dataset).length} />
         </div>
-        {dataset.warnings.length > 0 && (
-          <div className="mt-3 flex gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            <div>{dataset.warnings.join(" ")}</div>
-          </div>
-        )}
+        <Popover>
+          <PopoverTrigger
+            render={
+              <button className="mt-3 flex w-full items-start gap-2 rounded-md bg-sky-50 p-2 text-left text-xs text-sky-950 transition-colors hover:bg-sky-100" />
+            }
+          >
+            <ScanSearch className="mt-0.5 size-3.5 shrink-0 text-sky-700" />
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">{dataset.summary.kind}</span>
+              <span className="block text-sky-900/70">
+                {warningCount > 0 ? `${warningCount} thing${warningCount === 1 ? "" : "s"} to check · ` : ""}
+                Read the file description
+              </span>
+            </span>
+            {warningCount > 0 && <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600" />}
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="max-h-[80vh] w-[min(28rem,90vw)] overflow-auto">
+            <FileSummaryPanel summary={dataset.summary} compact />
+          </PopoverContent>
+        </Popover>
         <DerivedButton />
       </section>
 
@@ -211,7 +227,7 @@ function DerivedButton() {
   const [t, setT] = useState<string | null>(ti >= 0 ? dataset.variables[ti].key : null);
   const [s, setS] = useState<string | null>(si >= 0 ? dataset.variables[si].key : null);
   const [open, setOpen] = useState(false);
-  if (dataset.variables.some((v) => v.derived)) return null;
+  if (dataset.variables.some((v) => v.derived) || measuredIndices(dataset).length < 2) return null;
 
   const add = () => {
     const tIdx = dataset.variables.findIndex((v) => v.key === t);

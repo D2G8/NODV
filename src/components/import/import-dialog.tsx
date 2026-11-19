@@ -12,14 +12,17 @@ import { Switch } from "@/components/ui/switch";
 import { Field, SimpleSelect } from "@/components/controls";
 import { buildDataset } from "@/lib/odv/build";
 import { formatDate, parseDateCell } from "@/lib/odv/dates";
-import { ROLE_LABELS, ROLE_ORDER, validateMapping } from "@/lib/odv/detect";
+import { ROLE_LABELS, ROLE_ORDER, UNIQUE_ROLES, validateMapping } from "@/lib/odv/detect";
 import type { ColumnMapping, ColumnRole } from "@/lib/odv/types";
 import { useStore } from "@/lib/store";
 import { useImporter } from "@/lib/use-importer";
+import { FileSummaryPanel } from "./file-summary";
 import { cn } from "@/lib/utils";
 
 const ROLE_TONE: Partial<Record<ColumnRole, string>> = {
   primary: "bg-sky-50 text-sky-900",
+  intervalTop: "bg-sky-50 text-sky-900",
+  intervalBottom: "bg-sky-50 text-sky-900",
   variable: "bg-emerald-50 text-emerald-900",
   ignore: "bg-muted text-muted-foreground",
   metadata: "bg-violet-50 text-violet-900",
@@ -61,18 +64,30 @@ function ImportBody() {
 
   const errors = validateMapping(mapping);
   const preview = table.rows.slice(0, 8);
-  const counts = useMemo(() => {
-    const vars = mapping.roles.filter((r) => r === "variable" || r === "primary").length;
-    return { vars };
-  }, [mapping]);
+  const missingValues = useMemo(
+    () =>
+      missingText
+        .split(/[,;\s]+/)
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n !== 0),
+    [missingText],
+  );
+  const reading = useMemo(() => {
+    if (errors.length) return null;
+    try {
+      return buildDataset(table, { ...mapping, missingValues }).summary;
+    } catch {
+      return null;
+    }
+  }, [table, mapping, missingValues, errors.length]);
 
   const setRole = (col: number, role: ColumnRole) => {
     setMapping((m) => {
       const roles = [...m.roles];
-      const unique = role !== "variable" && role !== "metadata" && role !== "ignore";
-      if (unique) {
+      if (UNIQUE_ROLES.includes(role)) {
         const prevCol = roles.indexOf(role);
-        if (prevCol >= 0 && prevCol !== col) roles[prevCol] = role === "primary" ? "variable" : "metadata";
+        if (prevCol >= 0 && prevCol !== col)
+          roles[prevCol] = role === "primary" || role === "intervalTop" || role === "intervalBottom" ? "variable" : "metadata";
       }
       roles[col] = role;
       return { ...m, roles };
@@ -80,10 +95,6 @@ function ImportBody() {
   };
 
   const doImport = () => {
-    const missingValues = missingText
-      .split(/[,;\s]+/)
-      .map(Number)
-      .filter((n) => Number.isFinite(n) && n !== 0);
     try {
       const finalMapping = { ...mapping, missingValues };
       const ds = buildDataset(table, finalMapping);
@@ -103,7 +114,7 @@ function ImportBody() {
             }
           : null,
       );
-      toast.success(`Imported ${ds.stations.length} stations and ${ds.variables.length} variables`);
+      toast.success(`Imported ${ds.stations.length} stations`, { description: ds.summary.kind });
       for (const w of ds.warnings) toast.warning(w);
     } catch (err) {
       toast.error("Import failed", { description: err instanceof Error ? err.message : String(err) });
@@ -119,8 +130,8 @@ function ImportBody() {
           <Badge variant="secondary">{FORMAT_LABEL[table.format]}</Badge>
         </DialogTitle>
         <DialogDescription>
-          Check what each column means. We guessed from the headers; change anything that looks wrong.{" "}
-          {table.rows.length.toLocaleString()} rows · {table.headers.length} columns · {counts.vars} data variables selected.
+          We read the file and worked out what it contains. If anything below looks wrong, change a column’s role and
+          the description updates. {table.rows.length.toLocaleString()} rows · {table.headers.length} columns.
         </DialogDescription>
       </DialogHeader>
 
@@ -152,6 +163,18 @@ function ImportBody() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
+        <section className="border-b px-4 py-3">
+          {reading ? (
+            <FileSummaryPanel summary={reading} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Fix the column roles flagged below and a description of the file will appear here.
+            </p>
+          )}
+        </section>
+        <div className="px-4 pt-3 pb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          Column roles
+        </div>
         <table className="w-max min-w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-background shadow-[0_1px_0_var(--border)]">
             <tr>

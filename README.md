@@ -11,6 +11,12 @@ Everything runs client-side: files are parsed in the browser and never uploaded.
 - **Import**: ODV generic spreadsheet `.txt`, CSV/TSV/semicolon-delimited text, and Excel workbooks.
   - Automatic column-role detection (cruise, station, type, date/date-time, time of day, longitude,
     latitude, bottom depth, depth/pressure, data variables, extra metadata, quality-flag columns).
+  - The file is interpreted, not just tabulated: the import dialog says what kind of data it is (CTD
+    profiles, bottle profiles, net tow log, fixed-site time series, surface samples), summarises cruise,
+    vessel, period, area and depth coverage, separates measurements from sampling descriptors such as a
+    net's depth limits, and cross-checks the log (declared vs. listed nets, pooled or split samples,
+    gaps between intervals, samples deeper than the seafloor, remarks). The same description is
+    available from the sidebar after import, and tables keep the file's own row and column order.
   - A review dialog lets you correct any column role, pick a worksheet, set missing-value codes (for
     example `-999`), and choose day-first dates.
   - Follows ODV conventions: blank metadata cells continue the station above. It also accepts spreadsheets

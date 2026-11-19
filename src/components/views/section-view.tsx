@@ -16,7 +16,7 @@ import { cumulativeDistance, stationMaxLevel } from "@/lib/odv/geo";
 import { weightedAverageGrid } from "@/lib/odv/grid";
 import type { Station } from "@/lib/odv/types";
 import { useFilteredStations, useStore, type SectionAxis } from "@/lib/store";
-import { EmptyPlot, ViewToolbar } from "./view-chrome";
+import { EmptyPlot, NothingMeasured, useHasMeasurements, ViewToolbar } from "./view-chrome";
 
 const AXIS_LABEL: Record<SectionAxis, string> = {
   distance: "Section distance [km]",
@@ -51,6 +51,7 @@ export function SectionView() {
   const current = useStore((s) => s.current);
   const colorScale = useStore((s) => s.colorScale);
   const filtered = useFilteredStations();
+  const hasMeasurements = useHasMeasurements();
 
   const zi = dataset.variables.findIndex((v) => v.key === section.z);
   const p = dataset.primaryIndex;
@@ -229,6 +230,8 @@ export function SectionView() {
     const sorted = [...filtered].sort((a, b) => (a.date ?? a.index) - (b.date ?? b.index));
     setSection({ stations: sorted.map((s) => s.index), picking: false });
   };
+
+  if (!hasMeasurements) return <NothingMeasured what="a section" />;
 
   return (
     <div className="flex h-full min-h-0 flex-col">

@@ -23,6 +23,7 @@ export function TableView() {
   const stations = useFilteredStations();
   const [tab, setTab] = useState<"samples" | "stations">("samples");
   const station = current !== null ? dataset.stations[current] : null;
+  const columns = dataset.columns;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -50,31 +51,36 @@ export function TableView() {
               <table className="w-max min-w-full text-xs tabular-nums">
                 <thead className="sticky top-0 bg-background shadow-[0_1px_0_var(--border)]">
                   <tr>
-                    {dataset.variables.map((v) => (
-                      <th key={v.key} className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                        {v.label}
-                      </th>
-                    ))}
-                    {dataset.noteKeys.map((k) => (
-                      <th key={k} className="px-3 py-2 text-left font-semibold whitespace-nowrap">
-                        {k}
-                      </th>
-                    ))}
+                    {columns.map((c) =>
+                      c.kind === "variable" ? (
+                        <th key={`v${c.index}`} className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                          {dataset.variables[c.index].label}
+                        </th>
+                      ) : (
+                        <th key={`n${c.key}`} className="px-3 py-2 text-left font-semibold whitespace-nowrap">
+                          {c.key}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {Array.from({ length: station.n }, (_, i) => (
+                  {station.fileOrder.map((i) => (
                     <tr key={i} className="border-b hover:bg-muted/40">
-                      {station.data.map((arr, k) => (
-                        <td key={k} className={cn("px-3 py-1 text-right", k === dataset.primaryIndex && "font-medium")}>
-                          {fmt(arr[i])}
-                        </td>
-                      ))}
-                      {dataset.noteKeys.map((k) => (
-                        <td key={k} className="max-w-md px-3 py-1 text-left">
-                          {station.notes[k]?.[i]}
-                        </td>
-                      ))}
+                      {columns.map((c) =>
+                        c.kind === "variable" ? (
+                          <td
+                            key={`v${c.index}`}
+                            className={cn("px-3 py-1 text-right", c.index === dataset.primaryIndex && "font-medium")}
+                          >
+                            {fmt(station.data[c.index][i])}
+                          </td>
+                        ) : (
+                          <td key={`n${c.key}`} className="max-w-md px-3 py-1 text-left">
+                            {station.notes[c.key]?.[i]}
+                          </td>
+                        ),
+                      )}
                     </tr>
                   ))}
                 </tbody>

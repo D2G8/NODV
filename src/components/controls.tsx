@@ -69,7 +69,7 @@ export function VariableSelect({
   const dataset = useStore((s) => s.dataset);
   const options: Option[] = [
     ...(allowNone ? [{ value: NONE, label: noneLabel }] : []),
-    ...(dataset?.variables.map((v) => ({ value: v.key, label: v.label })) ?? []),
+    ...(dataset?.variables.filter((v) => !v.sampling).map((v) => ({ value: v.key, label: v.label })) ?? []),
   ];
   return (
     <Field label={label} className={className}>

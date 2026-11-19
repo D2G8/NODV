@@ -24,7 +24,10 @@ export function parseNumber(v: RawCell, missing: number[] = DEFAULT_MISSING): nu
   return n;
 }
 
-type Rule = { role: ColumnRole; test: RegExp };
+type Rule = { role: ColumnRole | "interval"; test: RegExp };
+
+const INTERVAL_BOUND =
+  /^(?!mid)(?=.*\b(depth|pressure|pres|z)\b)(?=.*\b(from|to|top|bottom|min|max|start|end|upper|lower|shallow|deep|open|close)\b)/i;
 
 const RULES: Rule[] = [
   { role: "ignore", test: /^(qv|qf)(:|_|\b)|quality ?flag|_qc$|^qc_|flag$/i },
@@ -39,6 +42,7 @@ const RULES: Rule[] = [
   { role: "time", test: /^(hh:mm|time|hour|(utc|gmt|local) ?time)\b/i },
   { role: "lon", test: /^(lon|long|longitude|x_lon|lng)\b/i },
   { role: "lat", test: /^(lat|latitude|y_lat)\b/i },
+  { role: "interval", test: INTERVAL_BOUND },
   { role: "primary", test: /^(mid ?depth|depth|pressure|pres|press|sample ?depth|z)\b/i },
   { role: "note", test: /remark|note|comment|observation|description|^(net|bottle|cup|niskin|tube|vial|sample ?(id|code|n[ºo°.]?)|label)\b/i },
 ];
@@ -56,10 +60,24 @@ function isMostlyNumeric(rows: RawCell[][], col: number, missing: number[]) {
   return { filled, numeric: filled > 0 && numeric / filled >= 0.8 };
 }
 
+function columnMean(rows: RawCell[][], col: number, missing: number[]) {
+  let sum = 0;
+  let n = 0;
+  for (const r of rows) {
+    const v = parseNumber(r[col], missing);
+    if (!Number.isNaN(v)) {
+      sum += v;
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
 export function detectMapping(table: RawTable): ColumnMapping {
   const missing = DEFAULT_MISSING;
   const taken = new Set<ColumnRole>();
   const metaCols = new Set(table.metaColumns ?? []);
+  const intervalCols: number[] = [];
   const roles: ColumnRole[] = table.headers.map((header, col) => {
     const { name } = splitNameUnit(header);
     const stats = isMostlyNumeric(table.rows, col, missing);
@@ -67,6 +85,11 @@ export function detectMapping(table: RawTable): ColumnMapping {
     for (const rule of RULES) {
       if (!rule.test.test(name) && !rule.test.test(header)) continue;
       if (rule.role === "ignore") return "ignore";
+      if (rule.role === "interval") {
+        if (isMeta || !stats.numeric) break;
+        intervalCols.push(col);
+        return "variable";
+      }
       if (rule.role === "note") {
         if (isMeta) break;
         return "note";
@@ -84,6 +107,13 @@ export function detectMapping(table: RawTable): ColumnMapping {
     return table.format === "odv" ? "metadata" : "note";
   });
 
+  if (intervalCols.length === 2) {
+    const [a, b] = intervalCols;
+    const deeperIsB = columnMean(table.rows, b, missing) >= columnMean(table.rows, a, missing);
+    roles[deeperIsB ? a : b] = "intervalTop";
+    roles[deeperIsB ? b : a] = "intervalBottom";
+  }
+
   if (!taken.has("primary")) {
     const i = roles.findIndex((r) => r === "variable");
     if (i >= 0) roles[i] = "primary";
@@ -98,12 +128,28 @@ export function validateMapping(mapping: ColumnMapping): string[] {
   if (!has("lon")) errs.push("Choose a longitude column.");
   if (!has("lat")) errs.push("Choose a latitude column.");
   if (!has("primary")) errs.push("Choose a depth or pressure column (the primary variable).");
-  for (const r of ["cruise", "station", "type", "date", "time", "lon", "lat", "botDepth", "primary"] as const) {
+  for (const r of UNIQUE_ROLES) {
     if (mapping.roles.filter((x) => x === r).length > 1)
       errs.push(`Only one column can be "${ROLE_LABELS[r]}".`);
   }
+  if (has("intervalTop") !== has("intervalBottom"))
+    errs.push("Sampling intervals need both a shallow-limit and a deep-limit column.");
   return errs;
 }
+
+export const UNIQUE_ROLES: ColumnRole[] = [
+  "cruise",
+  "station",
+  "type",
+  "date",
+  "time",
+  "lon",
+  "lat",
+  "botDepth",
+  "primary",
+  "intervalTop",
+  "intervalBottom",
+];
 
 export const ROLE_LABELS: Record<ColumnRole, string> = {
   cruise: "Cruise",
@@ -116,6 +162,8 @@ export const ROLE_LABELS: Record<ColumnRole, string> = {
   botDepth: "Bottom depth",
   primary: "Depth / pressure",
   variable: "Data variable",
+  intervalTop: "Interval: shallow limit",
+  intervalBottom: "Interval: deep limit",
   metadata: "Station metadata (text)",
   note: "Sample note / ID (text)",
   ignore: "Ignore",
@@ -124,6 +172,8 @@ export const ROLE_LABELS: Record<ColumnRole, string> = {
 export const ROLE_ORDER: ColumnRole[] = [
   "variable",
   "primary",
+  "intervalTop",
+  "intervalBottom",
   "cruise",
   "station",
   "type",

@@ -67,5 +67,11 @@ export function addDensityVariables(ds: Dataset, tIndex: number, sIndex: number)
     }
     return { ...st, data: [...st.data, th, sg] };
   });
-  return { ...ds, variables: [...ds.variables, theta, sigma], stations };
+  const n = ds.variables.length;
+  return {
+    ...ds,
+    variables: [...ds.variables, theta, sigma],
+    columns: [...ds.columns, { kind: "variable", index: n }, { kind: "variable", index: n + 1 }],
+    stations,
+  };
 }

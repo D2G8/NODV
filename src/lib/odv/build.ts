@@ -1,6 +1,19 @@
 import { parseDateCell, parseTimeCell } from "./dates";
 import { parseNumber, splitNameUnit } from "./detect";
-import type { ColumnMapping, Dataset, MetaRole, RawCell, RawTable, Station, Variable } from "./types";
+import { summarise } from "./interpret";
+
+export { measuredIndices, stationLabel } from "./interpret";
+import type {
+  ColumnMapping,
+  ColumnRole,
+  Dataset,
+  DatasetColumn,
+  MetaRole,
+  RawCell,
+  RawTable,
+  Station,
+  Variable,
+} from "./types";
 
 const STATION_KEY_ROLES: MetaRole[] = ["cruise", "station", "date", "time", "lon", "lat"];
 const META_ROLES: MetaRole[] = ["cruise", "station", "type", "date", "time", "lon", "lat", "botDepth"];
@@ -25,17 +38,17 @@ function slug(s: string, used: Set<string>) {
 interface PendingStation {
   meta: Record<MetaRole, RawCell>;
   extra: Record<string, string>;
-  rows: { v: number[]; t: string[] }[];
+  rows: { v: number[]; t: string[]; o: number }[];
 }
+
+const NUMERIC_ROLES = new Set<ColumnRole>(["primary", "variable", "intervalTop", "intervalBottom"]);
 
 export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
   const { roles, missingValues, dayFirst } = mapping;
   const col = (r: MetaRole | "primary") => roles.indexOf(r);
   const metaCols = Object.fromEntries(META_ROLES.map((r) => [r, col(r)])) as Record<MetaRole, number>;
   const primaryCol = col("primary");
-  const varCols = roles
-    .map((r, i) => (r === "primary" || r === "variable" ? i : -1))
-    .filter((i) => i >= 0);
+  const varCols = roles.map((r, i) => (NUMERIC_ROLES.has(r) ? i : -1)).filter((i) => i >= 0);
   // Primary variable is always first so station profiles sort by it.
   varCols.sort((a, b) => (a === primaryCol ? -1 : b === primaryCol ? 1 : a - b));
   const extraCols = roles.map((r, i) => (r === "metadata" ? i : -1)).filter((i) => i >= 0);
@@ -44,11 +57,18 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
   const used = new Set<string>();
   const variables: Variable[] = varCols.map((c) => {
     const { name, unit } = splitNameUnit(table.headers[c]);
-    return { key: slug(name, used), name, unit, label: variableLabel(name, unit) };
+    const sampling = roles[c] === "intervalTop" || roles[c] === "intervalBottom";
+    return { key: slug(name, used), name, unit, label: variableLabel(name, unit), ...(sampling && { sampling }) };
   });
   const extraKeys = extraCols.map((c) => table.headers[c]);
   const noteCols = roles.map((r, i) => (r === "note" ? i : -1)).filter((i) => i >= 0);
   const noteKeys = noteCols.map((c) => table.headers[c]);
+  const columns: DatasetColumn[] = [];
+  roles.forEach((r, c) => {
+    if (NUMERIC_ROLES.has(r)) columns.push({ kind: "variable", index: varCols.indexOf(c) });
+    else if (r === "note") columns.push({ kind: "note", key: table.headers[c] });
+  });
+  let rowOrder = 0;
 
   const groups = new Map<string, PendingStation>();
   const prev: Record<MetaRole, RawCell> = {
@@ -87,7 +107,7 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     } else {
       for (const k of extraKeys) if (!g.extra[k] && prevExtra[k]) g.extra[k] = prevExtra[k];
     }
-    g.rows.push({ v: values, t: texts });
+    g.rows.push({ v: values, t: texts, o: rowOrder++ });
   }
 
   const stations: Station[] = [];
@@ -119,6 +139,7 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
       return arr;
     });
     const notes = Object.fromEntries(noteKeys.map((k, ki) => [k, g.rows.map((r) => r.t[ki])]));
+    const fileOrder = g.rows.map((_, i) => i).sort((a, b) => g.rows[a].o - g.rows[b].o);
     stationCounter++;
     const bd = parseNumber(g.meta.botDepth, missingValues);
     stations.push({
@@ -134,6 +155,7 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
       notes,
       data,
       n,
+      fileOrder,
     });
   }
 
@@ -141,8 +163,13 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     warnings.push(`${skippedNoPos} station(s) were skipped because they had no valid latitude/longitude.`);
   if (metaCols.date < 0) warnings.push("No date column was mapped, so time filters and time axes are unavailable.");
 
-  return {
-    interval: detectInterval(variables, stations),
+  const top = varCols.indexOf(roles.indexOf("intervalTop"));
+  const bottom = varCols.indexOf(roles.indexOf("intervalBottom"));
+  const interval = top >= 0 && bottom >= 0 ? { top, bottom } : detectInterval(variables, stations);
+  if (interval) for (const i of [interval.top, interval.bottom]) variables[i].sampling = true;
+
+  const dataset: Omit<Dataset, "summary"> = {
+    interval,
     name: table.fileName.replace(/\.[^.]+$/, "").replace(/\.odv$/i, ""),
     fileName: table.fileName,
     format: table.format,
@@ -150,9 +177,11 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     primaryIndex: 0,
     extraKeys,
     noteKeys,
+    columns,
     stations,
     warnings,
   };
+  return { ...dataset, summary: summarise(dataset) };
 }
 
 const BOUND_WORD = /\b(from|to|top|bottom|min|max|start|end|upper|lower|shallow|deep)\b/i;
@@ -175,8 +204,4 @@ function detectInterval(variables: Variable[], stations: Station[]): Dataset["in
   };
   const [a, b] = bounds.map((x) => x.i);
   return mean(a) <= mean(b) ? { top: a, bottom: b } : { top: b, bottom: a };
-}
-
-export function stationLabel(s: Station) {
-  return s.cruise ? `${s.cruise} · ${s.station}` : s.station;
 }
