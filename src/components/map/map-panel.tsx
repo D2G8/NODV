@@ -87,7 +87,7 @@ export function MapPanel() {
           <Crop /> {filter.bbox ? "Clear area" : "Use map area"}
         </Button>
       </div>
-      <div className="relative min-h-0 flex-1">
+      <div className="relative isolate min-h-0 flex-1">
         <StationMap onReady={onReady} values={values} colorRange={range} />
         {section.picking && (
           <div className="absolute top-2 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-2 rounded-full bg-orange-500 px-3 py-1.5 text-xs font-medium text-white shadow-lg">

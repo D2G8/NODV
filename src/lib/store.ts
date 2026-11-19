@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import { guessSalinity, guessTemperature } from "./odv/derived";
+import type { ImportSettings } from "./library";
 import type { ColorScaleId } from "./odv/colormaps";
 import type { ColumnMapping, Dataset, RawTable, Station } from "./odv/types";
 
@@ -20,10 +21,20 @@ export interface PendingImport {
   table: RawTable;
   mapping: ColumnMapping;
   file: File | null;
+  savedId?: string | null;
+}
+
+export interface DatasetSource {
+  file: File;
+  settings: ImportSettings;
+  savedId: string | null;
 }
 
 interface State {
   dataset: Dataset | null;
+  source: DatasetSource | null;
+  libraryVersion: number;
+  libraryOpen: boolean;
   pending: PendingImport | null;
   loading: string | null;
   current: number | null;
@@ -53,7 +64,10 @@ interface State {
   mapColor: { variable: string | null; level: number };
   intervalColor: string | null;
 
-  setDataset: (ds: Dataset) => void;
+  setDataset: (ds: Dataset, source?: DatasetSource | null) => void;
+  markSaved: (id: string) => void;
+  bumpLibrary: () => void;
+  setLibraryOpen: (open: boolean) => void;
   updateDataset: (ds: Dataset) => void;
   clearDataset: () => void;
   setPending: (p: PendingImport | null) => void;
@@ -103,6 +117,9 @@ function defaultsFor(ds: Dataset) {
 
 export const useStore = create<State>((set) => ({
   dataset: null,
+  source: null,
+  libraryVersion: 0,
+  libraryOpen: false,
   pending: null,
   loading: null,
   current: null,
@@ -128,7 +145,10 @@ export const useStore = create<State>((set) => ({
   mapColor: { variable: null, level: 10 },
   intervalColor: null,
 
-  setDataset: (ds) => {
+  markSaved: (id) => set((s) => ({ source: s.source ? { ...s.source, savedId: id } : null, libraryVersion: s.libraryVersion + 1 })),
+  bumpLibrary: () => set((s) => ({ libraryVersion: s.libraryVersion + 1 })),
+  setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
+  setDataset: (ds, source = null) => {
     const d = defaultsFor(ds);
     const onlyIntervals =
       ds.interval !== undefined && ds.variables.length <= 3 && ds.variables.every((_, i) => i === ds.primaryIndex || i === ds.interval?.top || i === ds.interval?.bottom);
@@ -136,6 +156,8 @@ export const useStore = create<State>((set) => ({
       view: onlyIntervals ? "intervals" : s.view === "intervals" && !ds.interval ? "station" : s.view,
       intervalColor: null,
       dataset: ds,
+      source,
+      libraryOpen: false,
       pending: null,
       loading: null,
       current: ds.stations[0]?.index ?? null,
@@ -147,7 +169,7 @@ export const useStore = create<State>((set) => ({
     }));
   },
   updateDataset: (ds) => set({ dataset: ds }),
-  clearDataset: () => set({ dataset: null, current: null, filter: EMPTY_FILTER }),
+  clearDataset: () => set({ dataset: null, source: null, current: null, filter: EMPTY_FILTER }),
   setPending: (pending) => set({ pending }),
   setLoading: (loading) => set({ loading }),
   setCurrent: (current) => set({ current }),

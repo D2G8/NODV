@@ -8,10 +8,13 @@
     "start": "next start -p 4317",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "samples": "node scripts/generate-samples.mjs"
+    "samples": "node scripts/generate-samples.mjs",
+    "predev": "node -e \"require('fs').copyFileSync('supabase/migrations/20261119000000_datasets_library.sql','public/supabase-setup.sql')\"",
+    "prebuild": "node -e \"require('fs').copyFileSync('supabase/migrations/20261119000000_datasets_library.sql','public/supabase-setup.sql')\""
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@supabase/supabase-js": "^2.119.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "leaflet": "^1.9.4",

@@ -30,6 +30,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ImportDialog } from "@/components/import/import-dialog";
 import { Landing } from "@/components/landing";
+import { LibraryButton, LibraryDialog, SaveToLibraryButton } from "@/components/library";
 import { MapPanel } from "@/components/map/map-panel";
 import { Sidebar } from "@/components/sidebar";
 import { ScatterView } from "@/components/views/scatter-view";
@@ -92,6 +93,7 @@ export function AppShell() {
       <Header />
       {dataset ? <Workspace /> : <Landing />}
       <ImportDialog />
+      <LibraryDialog />
       {loading && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
           <div className="flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm shadow-lg ring-1 ring-black/5">
@@ -130,7 +132,7 @@ function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-[1100] flex h-14 shrink-0 items-center gap-2 border-b bg-white/90 px-3 backdrop-blur sm:px-4">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b bg-white/90 px-3 backdrop-blur sm:px-4">
       {dataset && (
         <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setSheetOpen(true)} aria-label="Stations and filters">
           <PanelLeft />
@@ -165,6 +167,7 @@ function Header() {
           />
           <FolderOpen /> <span className="hidden sm:inline">Open file</span>
         </label>
+        <LibraryButton />
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="sm" variant="ghost" />}>Samples</DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">
@@ -184,6 +187,7 @@ function Header() {
         </DropdownMenu>
         {dataset && (
           <>
+            <SaveToLibraryButton />
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button size="sm" />}>
                 <Download /> <span className="hidden sm:inline">Export</span>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { buildDataset } from "./odv/build";
 import { detectMapping, validateMapping } from "./odv/detect";
 import { readFile } from "./odv/read";
+import type { ImportSettings } from "./library";
 import { useStore } from "./store";
 
 const ACCEPTED = /\.(txt|csv|tsv|tab|dat|xlsx|xlsm|xlsb|xls|ods)$/i;
@@ -17,7 +18,10 @@ export function useImporter() {
   const setDataset = useStore((s) => s.setDataset);
 
   const openFile = useCallback(
-    async (file: File, opts: { skipDialog?: boolean; sheetName?: string } = {}) => {
+    async (
+      file: File,
+      opts: { skipDialog?: boolean; sheetName?: string; saved?: { id: string; settings: ImportSettings } } = {},
+    ) => {
       if (!ACCEPTED.test(file.name)) {
         toast.error(`“${file.name}” isn’t a supported file`, {
           description: "Use ODV spreadsheet .txt, CSV/TSV, or Excel (.xlsx, .xls, .ods).",
@@ -26,16 +30,25 @@ export function useImporter() {
       }
       setLoading(`Reading ${file.name}…`);
       try {
-        const table = await readFile(file, opts.sheetName);
+        const table = await readFile(file, opts.saved?.settings.sheetName ?? opts.sheetName);
         if (table.rows.length === 0) throw new Error("No data rows were found below the header row.");
-        const mapping = detectMapping(table);
-        if (opts.skipDialog && validateMapping(mapping).length === 0) {
+        const savedSettings = opts.saved?.settings;
+        const reuse =
+          savedSettings &&
+          savedSettings.headers.length === table.headers.length &&
+          savedSettings.headers.every((h, i) => h === table.headers[i]);
+        const mapping = reuse ? savedSettings.mapping : detectMapping(table);
+        if ((opts.skipDialog || reuse) && validateMapping(mapping).length === 0) {
           const ds = buildDataset(table, mapping);
           if (ds.stations.length === 0) throw new Error("No stations with valid positions were found.");
-          setDataset(ds);
+          setDataset(ds, {
+            file,
+            settings: { sheetName: table.sheetName, headers: table.headers, mapping },
+            savedId: opts.saved?.id ?? null,
+          });
           toast.success(`Loaded ${ds.stations.length} stations from ${file.name}`);
         } else {
-          setPending({ table, mapping, file });
+          setPending({ table, mapping, file, savedId: opts.saved?.id ?? null });
         }
       } catch (err) {
         toast.error(`Couldn’t read ${file.name}`, { description: err instanceof Error ? err.message : String(err) });

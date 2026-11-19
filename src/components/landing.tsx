@@ -2,6 +2,7 @@
 
 import { FileSpreadsheet, FileText, Lock, Map as MapIcon, Mountain, ScatterChart, Sigma, Upload, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RecentLibrary } from "@/components/library";
 import { ACCEPT_ATTR, SAMPLES, useImporter } from "@/lib/use-importer";
 
 const FEATURES = [
@@ -47,7 +48,7 @@ export function Landing() {
           ))}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Lock className="size-3" /> Files are read in your browser and never uploaded.
+          <Lock className="size-3" /> Files are read in your browser. Nothing is uploaded unless you save it to your library.
         </div>
         <input
           type="file"
@@ -61,6 +62,8 @@ export function Landing() {
           }}
         />
       </label>
+
+      <RecentLibrary />
 
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-muted-foreground">No data to hand? Try a sample</h2>

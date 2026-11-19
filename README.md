@@ -32,6 +32,29 @@ Everything runs client-side: files are parsed in the browser and never uploaded.
 - **Export** the shown stations as an ODV spreadsheet (`.txt`, ready to open in ODV), an Excel workbook,
   or CSV. Every plot can be saved as a high-resolution PNG from its toolbar.
 
+- **Station-per-sheet workbooks**: field logs that put each station on its own worksheet are combined
+  into one dataset. Each sheet has a "label | value" block at the top (cruise, date, GMT time, station,
+  bottom depth, latitude, longitude…) followed by a sample table, often with a two-row header such as
+  MultiNet net logs. Net/bottle IDs and remarks are kept per sample, and depth intervals ("from"/"to")
+  get a mid-depth so they can be plotted.
+- **Sampling intervals** view for net tows and other interval samples: each net or cup is a bar spanning
+  its depth range at every station, and samples with remarks are highlighted.
+- **Dataset library (Supabase)**: save an opened file and its column settings, then reopen it later from
+  any device.
+
+## Supabase library setup
+
+The app talks to Supabase from the browser with the project URL and publishable key in
+`src/lib/library.ts`. You can override them with `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Before first use, create the table and storage bucket once:
+
+1. Open the Supabase dashboard → SQL Editor → New query.
+2. Paste `supabase/migrations/20261119000000_datasets_library.sql` and run it. You can also use
+   **Copy setup SQL** in the app's Library dialog.
+
+The policies let anyone who has the publishable key list, add and remove library entries. The app has no
+user accounts, so tighten the policies if the data is sensitive.
+
 ## Running locally
 
 Requires Node.js 20+.

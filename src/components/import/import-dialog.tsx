@@ -85,14 +85,24 @@ function ImportBody() {
       .map(Number)
       .filter((n) => Number.isFinite(n) && n !== 0);
     try {
-      const ds = buildDataset(table, { ...mapping, missingValues });
+      const finalMapping = { ...mapping, missingValues };
+      const ds = buildDataset(table, finalMapping);
       if (ds.stations.length === 0) {
         toast.error("No stations could be built", {
           description: "Check that latitude and longitude columns are mapped and contain decimal degrees.",
         });
         return;
       }
-      setDataset(ds);
+      setDataset(
+        ds,
+        pending.file
+          ? {
+              file: pending.file,
+              settings: { sheetName: table.sheetName, headers: table.headers, mapping: finalMapping },
+              savedId: pending.savedId ?? null,
+            }
+          : null,
+      );
       toast.success(`Imported ${ds.stations.length} stations and ${ds.variables.length} variables`);
       for (const w of ds.warnings) toast.warning(w);
     } catch (err) {
