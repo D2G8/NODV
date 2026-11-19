@@ -1,0 +1,43 @@
+{
+  "name": "ocean-data-explorer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4317",
+    "build": "next build",
+    "start": "next start -p 4317",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "samples": "node scripts/generate-samples.mjs"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.5.2",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.75.0",
+    "next": "16.4.6",
+    "next-themes": "^0.4.6",
+    "plotly.js-dist-min": "^4.3.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-leaflet": "^5.0.0",
+    "shadcn": "^4.23.0",
+    "sonner": "^2.0.8",
+    "tw-animate-css": "^1.4.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^20",
+    "@types/plotly.js": "^3.0.15",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5"
+  }
+}
