@@ -72,6 +72,25 @@ function useLibrary(enabled = true) {
   return { state, reload };
 }
 
+let availability: Promise<boolean> | null = null;
+
+/** False when this visitor can't use the library at all (not signed in, or no Supabase key on the host). */
+function useLibraryAvailable() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    availability ??= listDatasets().then(
+      () => true,
+      (err) => !(err instanceof LibraryError && (err.code === "sign_in" || err.code === "not_connected")),
+    );
+    availability.then((ok) => alive && setAvailable(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return available;
+}
+
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
@@ -102,7 +121,8 @@ export function SaveToLibraryButton() {
   const markSaved = useStore((s) => s.markSaved);
   const setLibraryOpen = useStore((s) => s.setLibraryOpen);
   const [saving, setSaving] = useState(false);
-  if (!dataset) return null;
+  const available = useLibraryAvailable();
+  if (!dataset || !available) return null;
 
   if (source?.savedId) {
     return (
@@ -143,6 +163,7 @@ export function SaveToLibraryButton() {
 
 export function LibraryButton() {
   const setLibraryOpen = useStore((s) => s.setLibraryOpen);
+  if (!useLibraryAvailable()) return null;
   return (
     <Button size="sm" variant="ghost" onClick={() => setLibraryOpen(true)}>
       <Library /> <span className="hidden sm:inline">Library</span>
@@ -332,6 +353,7 @@ function SetupNotice({ onDone, compact }: { onDone: () => void; compact?: boolea
 
 export function RecentLibrary() {
   const setLibraryOpen = useStore((s) => s.setLibraryOpen);
+  if (!useLibraryAvailable()) return null;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">

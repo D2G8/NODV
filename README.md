@@ -71,7 +71,9 @@ row and file to that viewer. Files are uploaded and downloaded through short-liv
 
 Without `SUPABASE_SECRET_KEY`, `npm run dev` / `npm start` keep the library in `.data/library` on
 your machine instead (this folder is gitignored), and the local viewer is the simulated one in
-`cursor/identity.dev.ts`. The published app needs to be private or team so that viewers are signed in.
+`cursor/identity.dev.ts`. The library needs signed-in viewers, so it only works when the app is
+published as private or team. On a public app, or when the host has no secret key, the Library and Save
+buttons are hidden and everything else works as usual.
 
 ## Running locally
 
