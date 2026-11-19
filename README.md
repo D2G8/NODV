@@ -53,20 +53,25 @@ Everything runs client-side: files are parsed in the browser and never uploaded.
 - **Sampling intervals** view for net tows and other interval samples: each net or cup is a bar spanning
   its depth range at every station, and samples with remarks are highlighted.
 - **Dataset library (Supabase)**: save an opened file and its column settings, then reopen it later from
-  any device.
+  any device. Each person sees and removes only their own saved datasets.
 
 ## Supabase library setup
 
-The app talks to Supabase from the browser with the project URL and publishable key in
-`src/lib/library.ts`. You can override them with `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Before first use, create the table and storage bucket once:
+The browser never talks to Supabase with a key. The app's server routes (`src/app/api/library`) check
+the signed-in Cursor viewer, then read and write Supabase with the project's secret key, scoping every
+row and file to that viewer. Files are uploaded and downloaded through short-lived signed URLs.
 
-1. Open the Supabase dashboard → SQL Editor → New query.
-2. Paste `supabase/migrations/20261119000000_datasets_library.sql` and run it. You can also use
-   **Copy setup SQL** in the app's Library dialog.
+1. Run `supabase/migrations/20261119000000_datasets_library.sql` once in the Supabase dashboard
+   (SQL Editor → New query → paste → Run). It is safe to run again. The Library dialog's
+   **Copy setup SQL** button copies it too. Row-level security is on with no policies, so the
+   publishable key gets no access.
+2. Give the server the secret key as `SUPABASE_SECRET_KEY` (an `sb_secret_…` or `service_role` key from
+   Project Settings → API keys). For the published app, add it as an app secret in Cursor. Locally,
+   put it in `.env.local`. `SUPABASE_URL` is optional and defaults to the project's URL.
 
-The policies let anyone who has the publishable key list, add and remove library entries. The app has no
-user accounts, so tighten the policies if the data is sensitive.
+Without `SUPABASE_SECRET_KEY`, `npm run dev` / `npm start` keep the library in `.data/library` on
+your machine instead (this folder is gitignored), and the local viewer is the simulated one in
+`cursor/identity.dev.ts`. The published app needs to be private or team so that viewers are signed in.
 
 ## Running locally
 

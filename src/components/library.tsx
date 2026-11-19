@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   deleteDataset,
   downloadDataset,
-  LibraryNotSetUpError,
+  LibraryError,
   listDatasets,
   saveDataset,
   SUPABASE_SQL_EDITOR_URL,
@@ -36,6 +36,7 @@ type LibraryState =
   | { status: "loading" }
   | { status: "ready"; items: SavedDataset[] }
   | { status: "not-set-up" }
+  | { status: "unavailable"; title: string; message: string }
   | { status: "error"; message: string };
 
 function useLibrary(enabled = true) {
@@ -50,7 +51,13 @@ function useLibrary(enabled = true) {
       .then((items) => alive && setState({ status: "ready", items }))
       .catch((err) => {
         if (!alive) return;
-        if (err instanceof LibraryNotSetUpError) setState({ status: "not-set-up" });
+        if (err instanceof LibraryError && err.code === "not_set_up") setState({ status: "not-set-up" });
+        else if (err instanceof LibraryError && (err.code === "not_connected" || err.code === "sign_in"))
+          setState({
+            status: "unavailable",
+            title: err.code === "sign_in" ? "Sign in to use your library" : "The library isn’t connected yet",
+            message: err.message,
+          });
         else setState({ status: "error", message: err instanceof Error ? err.message : String(err) });
       });
     return () => {
@@ -116,9 +123,9 @@ export function SaveToLibraryButton() {
       markSaved(row.id);
       toast.success(`Saved “${row.name}” to your library`);
     } catch (err) {
-      if (err instanceof LibraryNotSetUpError) {
+      if (err instanceof LibraryError && ["not_set_up", "not_connected", "sign_in"].includes(err.code)) {
         setLibraryOpen(true);
-        toast.error("Finish setting up the library first");
+        toast.error("The library isn’t ready", { description: err.message });
       } else {
         toast.error("Couldn’t save to the library", { description: err instanceof Error ? err.message : String(err) });
       }
@@ -154,7 +161,8 @@ export function LibraryDialog() {
             <Database className="size-4 text-sky-700" /> Dataset library
           </DialogTitle>
           <DialogDescription>
-            Files saved here are stored in your Supabase project with their column settings, so they reopen in one click.
+            Files you save here are stored in Supabase with their column settings, so they reopen in one click. Only you can
+            see your saved datasets.
           </DialogDescription>
         </DialogHeader>
         {open && <LibraryList />}
@@ -191,6 +199,16 @@ function LibraryList({ limit, compact }: { limit?: number; compact?: boolean }) 
       </div>
     );
   if (state.status === "not-set-up") return <SetupNotice onDone={reload} compact={compact} />;
+  if (state.status === "unavailable")
+    return (
+      <div className={cn("flex items-start gap-2 text-sm", compact ? "rounded-xl border border-dashed bg-card p-4" : "p-5")}>
+        <Database className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <div>
+          <div className="font-medium">{state.title}</div>
+          <p className="text-xs text-muted-foreground">{state.message}</p>
+        </div>
+      </div>
+    );
   if (state.status === "error")
     return (
       <div className="flex flex-col items-center gap-3 p-8 text-center text-sm">
@@ -287,7 +305,8 @@ function SetupNotice({ onDone, compact }: { onDone: () => void; compact?: boolea
         <div>
           <div className="font-medium">Connect the Supabase library (one-time setup)</div>
           <p className="text-xs text-muted-foreground">
-            Your Supabase project is reachable, but its library table and storage bucket don’t exist yet.
+            The Supabase library table and storage bucket don’t exist yet, or need the updated setup (each saved
+            dataset now belongs to the person who saved it).
           </p>
         </div>
       </div>

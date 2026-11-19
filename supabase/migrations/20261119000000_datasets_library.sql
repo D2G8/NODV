@@ -1,8 +1,13 @@
 -- Saved-datasets library for Ocean Data Explorer.
--- Run once in the Supabase dashboard: SQL Editor -> New query -> paste -> Run.
+-- Run in the Supabase dashboard: SQL Editor -> New query -> paste -> Run. Safe to run again.
+--
+-- Only the app's server, using the project's secret key, reads or writes the library, and it
+-- scopes every row and file to the signed-in viewer (the owner column). Row-level security is on
+-- with no policies, so the publishable/anon key and signed-in Supabase users get no access at all.
 
 create table if not exists public.datasets (
   id uuid primary key default gen_random_uuid(),
+  owner text,
   name text not null check (char_length(name) between 1 and 200),
   file_name text not null check (char_length(file_name) between 1 and 255),
   format text not null check (format in ('odv', 'csv', 'excel')),
@@ -17,20 +22,19 @@ create table if not exists public.datasets (
   created_at timestamptz not null default now()
 );
 
-create index if not exists datasets_created_at_idx on public.datasets (created_at desc);
+-- Earlier versions of this script had no owner; rows saved then stay hidden from everyone.
+alter table public.datasets add column if not exists owner text;
+
+drop index if exists public.datasets_created_at_idx;
+create index if not exists datasets_owner_created_at_idx on public.datasets (owner, created_at desc);
 
 alter table public.datasets enable row level security;
+alter table public.datasets force row level security;
 
--- The app has no user accounts: anyone holding the publishable key can list, add and remove
--- datasets. Tighten these policies (e.g. to authenticated users) if the data is sensitive.
 drop policy if exists "datasets are readable" on public.datasets;
-create policy "datasets are readable" on public.datasets for select to anon, authenticated using (true);
-
 drop policy if exists "datasets can be added" on public.datasets;
-create policy "datasets can be added" on public.datasets for insert to anon, authenticated with check (true);
-
 drop policy if exists "datasets can be removed" on public.datasets;
-create policy "datasets can be removed" on public.datasets for delete to anon, authenticated using (true);
+revoke all on table public.datasets from anon, authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
@@ -46,22 +50,14 @@ values (
     'application/vnd.ms-excel',
     'application/vnd.ms-excel.sheet.macroEnabled.12',
     'application/vnd.ms-excel.sheet.binary.macroEnabled.12',
-    'application/vnd.oasis.opendocument.spreadsheet',
-    'application/octet-stream'
+    'application/vnd.oasis.opendocument.spreadsheet'
   ]
 )
 on conflict (id) do update
-  set file_size_limit = excluded.file_size_limit,
+  set public = false,
+      file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "dataset files are readable" on storage.objects;
-create policy "dataset files are readable" on storage.objects for select to anon, authenticated
-  using (bucket_id = 'datasets');
-
 drop policy if exists "dataset files can be added" on storage.objects;
-create policy "dataset files can be added" on storage.objects for insert to anon, authenticated
-  with check (bucket_id = 'datasets');
-
 drop policy if exists "dataset files can be removed" on storage.objects;
-create policy "dataset files can be removed" on storage.objects for delete to anon, authenticated
-  using (bucket_id = 'datasets');

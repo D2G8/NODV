@@ -42,3 +42,6 @@ next-env.d.ts
 
 # generated from supabase/migrations by predev/prebuild
 /public/supabase-setup.sql
+
+# local development library
+/.data/
