@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -114,7 +114,6 @@ function Header() {
   const clearDataset = useStore((s) => s.clearDataset);
   const stations = useFilteredStations();
   const { openFile, loadSample } = useImporter();
-  const input = useRef<HTMLInputElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const runExport = async (fn: typeof exportCsv | typeof exportXlsx, label: string) => {
@@ -144,20 +143,25 @@ function Header() {
         </div>
       </div>
       <div className="ml-auto flex items-center gap-1.5">
-        <input
-          ref={input}
-          type="file"
-          accept={ACCEPT_ATTR}
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) openFile(f);
-            e.target.value = "";
-          }}
-        />
-        <Button size="sm" variant={dataset ? "outline" : "default"} onClick={() => input.current?.click()}>
+        <label
+          className={cn(
+            buttonVariants({ size: "sm", variant: dataset ? "outline" : "default" }),
+            "cursor-pointer focus-within:ring-3 focus-within:ring-ring/50",
+          )}
+        >
+          <input
+            type="file"
+            accept={ACCEPT_ATTR}
+            className="sr-only"
+            aria-label="Open a data file"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) openFile(f);
+              e.target.value = "";
+            }}
+          />
           <FolderOpen /> <span className="hidden sm:inline">Open file</span>
-        </Button>
+        </label>
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="sm" variant="ghost" />}>Samples</DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">

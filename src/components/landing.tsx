@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import { FileSpreadsheet, FileText, Lock, Map as MapIcon, Mountain, ScatterChart, Sigma, Upload, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ACCEPT_ATTR, SAMPLES, useImporter } from "@/lib/use-importer";
@@ -16,7 +15,6 @@ const FEATURES = [
 
 export function Landing() {
   const { openFile, loadSample } = useImporter();
-  const input = useRef<HTMLInputElement>(null);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-10 sm:py-16">
@@ -33,17 +31,14 @@ export function Landing() {
         </p>
       </div>
 
-      <div
-        className="group relative flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-sky-300 bg-gradient-to-b from-sky-50 to-white px-6 py-12 text-center transition-colors hover:border-sky-500 hover:bg-sky-50"
-        onClick={() => input.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
-      >
+      <label className="group relative flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-sky-300 bg-gradient-to-b from-sky-50 to-white px-6 py-12 text-center transition-colors focus-within:border-sky-500 focus-within:ring-3 focus-within:ring-sky-200 hover:border-sky-500 hover:bg-sky-50">
         <div className="rounded-full bg-white p-3 shadow-sm ring-1 ring-sky-200">
           <Upload className="size-6 text-sky-700" />
         </div>
         <div className="text-lg font-medium">Drop a data file here, or click to browse</div>
+        <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground group-hover:bg-primary/90">
+          <Upload className="size-4" /> Choose a file
+        </span>
         <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
           {["ODV spreadsheet .txt", ".csv / .tsv", ".xlsx", ".xls", ".ods"].map((f) => (
             <span key={f} className="rounded-md bg-white px-2 py-0.5 ring-1 ring-border">
@@ -55,17 +50,17 @@ export function Landing() {
           <Lock className="size-3" /> Files are read in your browser and never uploaded.
         </div>
         <input
-          ref={input}
           type="file"
           accept={ACCEPT_ATTR}
-          className="hidden"
+          className="sr-only"
+          aria-label="Choose a data file to import"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) openFile(f);
             e.target.value = "";
           }}
         />
-      </div>
+      </label>
 
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-muted-foreground">No data to hand? Try a sample</h2>

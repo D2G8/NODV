@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Field, SimpleSelect } from "@/components/controls";
 import { buildDataset } from "@/lib/odv/build";
+import { formatDate, parseDateCell } from "@/lib/odv/dates";
 import { ROLE_LABELS, ROLE_ORDER, validateMapping } from "@/lib/odv/detect";
 import type { ColumnMapping, ColumnRole } from "@/lib/odv/types";
 import { useStore } from "@/lib/store";
@@ -23,6 +24,16 @@ const ROLE_TONE: Partial<Record<ColumnRole, string>> = {
   ignore: "bg-muted text-muted-foreground",
   metadata: "bg-violet-50 text-violet-900",
 };
+
+function previewCell(v: string | number, role: ColumnRole, format: string) {
+  if (typeof v !== "number" || format !== "excel") return String(v);
+  if (role === "date") return formatDate(parseDateCell(v, false, true), v % 1 !== 0);
+  if (role === "time" && v >= 0 && v < 1) {
+    const mins = Math.round(v * 1440);
+    return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+  }
+  return String(v);
+}
 
 const FORMAT_LABEL = { odv: "ODV spreadsheet", csv: "Delimited text", excel: "Excel workbook" };
 
@@ -98,7 +109,7 @@ function ImportBody() {
           <Badge variant="secondary">{FORMAT_LABEL[table.format]}</Badge>
         </DialogTitle>
         <DialogDescription>
-          Check what each column means. We guessed from the headers; change anything that looks wrong.
+          Check what each column means. We guessed from the headers; change anything that looks wrong.{" "}
           {table.rows.length.toLocaleString()} rows · {table.headers.length} columns · {counts.vars} data variables selected.
         </DialogDescription>
       </DialogHeader>
@@ -155,7 +166,7 @@ function ImportBody() {
                       mapping.roles[c] === "ignore" && "text-muted-foreground/50",
                     )}
                   >
-                    {v === null ? <span className="text-muted-foreground/40">·</span> : String(v)}
+                    {v === null ? <span className="text-muted-foreground/40">·</span> : previewCell(v, mapping.roles[c], table.format)}
                   </td>
                 ))}
               </tr>
