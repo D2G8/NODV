@@ -1,3 +1,4 @@
+import { ALL_STATION_SHEETS, combineStationSheets, findStationSheets } from "./station-sheets";
 import type { RawCell, RawTable, SourceFormat } from "./types";
 
 const EXCEL_EXT = /\.(xlsx|xlsm|xlsb|xls|ods)$/i;
@@ -23,6 +24,20 @@ export async function readExcel(
   // the local-timezone shifts SheetJS applies when materialising Date objects.
   const wb = XLSX.read(buffer, { type: "array", cellDates: false, dense: true });
   const sheetNames = wb.SheetNames;
+  const stationSheets = findStationSheets(wb, XLSX, normaliseCell);
+  const listed = stationSheets.length > 1 ? [ALL_STATION_SHEETS, ...sheetNames] : sheetNames;
+
+  const single = stationSheets.find((s) => s.name === sheetName);
+  if (stationSheets.length > 0 && (!sheetName || sheetName === ALL_STATION_SHEETS || single)) {
+    const chosenSheets = single ? [single] : stationSheets;
+    const table = combineStationSheets(chosenSheets, fileName, single ? [single.name] : sheetNames);
+    return addIntervalMidpoint({
+      ...table,
+      sheetName: single ? single.name : stationSheets.length > 1 ? ALL_STATION_SHEETS : stationSheets[0].name,
+      sheetNames: listed,
+    });
+  }
+
   const chosen =
     sheetName && sheetNames.includes(sheetName) ? sheetName : pickBestSheet(wb, XLSX);
   const ws = wb.Sheets[chosen];
@@ -37,7 +52,40 @@ export async function readExcel(
     fileName,
     "excel",
   );
-  return { ...table, sheetName: chosen, sheetNames };
+  return addIntervalMidpoint({ ...table, sheetName: chosen, sheetNames: listed });
+}
+
+const INTERVAL_WORD = /\b(from|to|top|bottom|min|max|start|end|upper|lower|shallow|deep)\b/i;
+
+/**
+ * Net tows and other depth-integrated samples record a depth interval rather than a depth.
+ * When a table has two such bound columns and no plain depth column, add their midpoint so
+ * samples can be placed on a depth axis.
+ */
+export function addIntervalMidpoint(table: RawTable): RawTable {
+  const metaCols = new Set(table.metaColumns ?? []);
+  const isDepthish = (h: string) => /depth|pressure|\bz\b/i.test(h) && !/bot\.?|bottom depth|water depth|sea ?floor/i.test(h.replace(/from bottom|to bottom/i, ""));
+  const candidates = table.headers
+    .map((h, c) => ({ h, c }))
+    .filter(({ h, c }) => !metaCols.has(c) && isDepthish(h));
+  const plain = candidates.filter(({ h }) => !INTERVAL_WORD.test(h));
+  const bounds = candidates.filter(({ h }) => INTERVAL_WORD.test(h));
+  if (plain.length > 0 || bounds.length !== 2) return table;
+  const [a, b] = bounds.map((x) => x.c);
+  const num = (v: RawCell) => (typeof v === "number" ? v : v === null ? NaN : Number(String(v).replace(",", ".")));
+  const at = Math.min(a, b);
+  const unit = table.headers[a].match(/\[([^\]]+)\]/)?.[1] ?? "m";
+  return {
+    ...table,
+    headers: [...table.headers.slice(0, at), `Mid depth [${unit}]`, ...table.headers.slice(at)],
+    rows: table.rows.map((r) => {
+      const x = num(r[a]);
+      const y = num(r[b]);
+      const mid = Number.isFinite(x) && Number.isFinite(y) ? (x + y) / 2 : null;
+      return [...r.slice(0, at), mid, ...r.slice(at)];
+    }),
+    metaColumns: table.metaColumns?.map((c) => (c >= at ? c + 1 : c)),
+  };
 }
 
 function pickBestSheet(
@@ -83,7 +131,7 @@ export function readText(text: string, fileName: string): RawTable {
   const delimiter = detectDelimiter(body.slice(0, 20));
   const matrix = body.map((l) => splitLine(l, delimiter).map(normaliseCell));
   const format: SourceFormat = isOdv && delimiter === "\t" ? "odv" : "csv";
-  return { ...matrixToTable(matrix, fileName, format), comments };
+  return addIntervalMidpoint({ ...matrixToTable(matrix, fileName, format), comments });
 }
 
 function detectDelimiter(sample: string[]): string {

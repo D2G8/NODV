@@ -25,7 +25,7 @@ function slug(s: string, used: Set<string>) {
 interface PendingStation {
   meta: Record<MetaRole, RawCell>;
   extra: Record<string, string>;
-  rows: number[][];
+  rows: { v: number[]; t: string[] }[];
 }
 
 export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
@@ -47,6 +47,8 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     return { key: slug(name, used), name, unit, label: variableLabel(name, unit) };
   });
   const extraKeys = extraCols.map((c) => table.headers[c]);
+  const noteCols = roles.map((r, i) => (r === "note" ? i : -1)).filter((i) => i >= 0);
+  const noteKeys = noteCols.map((c) => table.headers[c]);
 
   const groups = new Map<string, PendingStation>();
   const prev: Record<MetaRole, RawCell> = {
@@ -74,7 +76,8 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
       prevExtra = ex;
     }
     const values = varCols.map((c) => parseNumber(row[c], missingValues));
-    if (values.every((v) => Number.isNaN(v))) continue;
+    const texts = noteCols.map((c) => (row[c] === null ? "" : String(row[c])));
+    if (values.every((v) => Number.isNaN(v)) && texts.every((t) => t === "")) continue;
 
     const key = STATION_KEY_ROLES.map((r) => String(prev[r] ?? "")).join("\u0001");
     let g = groups.get(key);
@@ -84,7 +87,7 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     } else {
       for (const k of extraKeys) if (!g.extra[k] && prevExtra[k]) g.extra[k] = prevExtra[k];
     }
-    g.rows.push(values);
+    g.rows.push({ v: values, t: texts });
   }
 
   const stations: Station[] = [];
@@ -103,8 +106,8 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     if (tod !== null) date = (date === null ? null : Math.floor(date / 86_400_000) * 86_400_000 + tod);
 
     g.rows.sort((a, b) => {
-      const pa = a[0];
-      const pb = b[0];
+      const pa = a.v[0];
+      const pb = b.v[0];
       if (Number.isNaN(pa)) return 1;
       if (Number.isNaN(pb)) return -1;
       return pa - pb;
@@ -112,9 +115,10 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
     const n = g.rows.length;
     const data = variables.map((_, vi) => {
       const arr = new Float64Array(n);
-      for (let i = 0; i < n; i++) arr[i] = g.rows[i][vi];
+      for (let i = 0; i < n; i++) arr[i] = g.rows[i].v[vi];
       return arr;
     });
+    const notes = Object.fromEntries(noteKeys.map((k, ki) => [k, g.rows.map((r) => r.t[ki])]));
     stationCounter++;
     const bd = parseNumber(g.meta.botDepth, missingValues);
     stations.push({
@@ -127,6 +131,7 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
       lat,
       botDepth: Number.isNaN(bd) ? null : bd,
       extra: g.extra,
+      notes,
       data,
       n,
     });
@@ -137,15 +142,39 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
   if (metaCols.date < 0) warnings.push("No date column was mapped, so time filters and time axes are unavailable.");
 
   return {
+    interval: detectInterval(variables, stations),
     name: table.fileName.replace(/\.[^.]+$/, "").replace(/\.odv$/i, ""),
     fileName: table.fileName,
     format: table.format,
     variables,
     primaryIndex: 0,
     extraKeys,
+    noteKeys,
     stations,
     warnings,
   };
+}
+
+const BOUND_WORD = /\b(from|to|top|bottom|min|max|start|end|upper|lower|shallow|deep)\b/i;
+
+function detectInterval(variables: Variable[], stations: Station[]): Dataset["interval"] {
+  const bounds = variables
+    .map((v, i) => ({ v, i }))
+    .filter(({ v, i }) => i !== 0 && /depth|pressure/i.test(v.name) && BOUND_WORD.test(v.name));
+  if (bounds.length !== 2) return undefined;
+  const mean = (vi: number) => {
+    let sum = 0;
+    let n = 0;
+    for (const st of stations)
+      for (const x of st.data[vi])
+        if (!Number.isNaN(x)) {
+          sum += x;
+          n++;
+        }
+    return n ? sum / n : 0;
+  };
+  const [a, b] = bounds.map((x) => x.i);
+  return mean(a) <= mean(b) ? { top: a, bottom: b } : { top: b, bottom: a };
 }
 
 export function stationLabel(s: Station) {

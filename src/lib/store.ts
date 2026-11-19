@@ -6,7 +6,7 @@ import { guessSalinity, guessTemperature } from "./odv/derived";
 import type { ColorScaleId } from "./odv/colormaps";
 import type { ColumnMapping, Dataset, RawTable, Station } from "./odv/types";
 
-export type ViewId = "station" | "scatter" | "section" | "table";
+export type ViewId = "station" | "scatter" | "section" | "intervals" | "table";
 export type SectionAxis = "distance" | "lon" | "lat" | "time";
 
 export interface StationFilter {
@@ -51,6 +51,7 @@ interface State {
   };
 
   mapColor: { variable: string | null; level: number };
+  intervalColor: string | null;
 
   setDataset: (ds: Dataset) => void;
   updateDataset: (ds: Dataset) => void;
@@ -68,6 +69,7 @@ interface State {
   setSection: (s: Partial<State["section"]>) => void;
   toggleSectionStation: (i: number) => void;
   setMapColor: (m: Partial<State["mapColor"]>) => void;
+  setIntervalColor: (k: string | null) => void;
 }
 
 const EMPTY_FILTER: StationFilter = { cruises: null, dateFrom: null, dateTo: null, bbox: null };
@@ -124,10 +126,15 @@ export const useStore = create<State>((set) => ({
     gridded: true,
   },
   mapColor: { variable: null, level: 10 },
+  intervalColor: null,
 
   setDataset: (ds) => {
     const d = defaultsFor(ds);
+    const onlyIntervals =
+      ds.interval !== undefined && ds.variables.length <= 3 && ds.variables.every((_, i) => i === ds.primaryIndex || i === ds.interval?.top || i === ds.interval?.bottom);
     set((s) => ({
+      view: onlyIntervals ? "intervals" : s.view === "intervals" && !ds.interval ? "station" : s.view,
+      intervalColor: null,
       dataset: ds,
       pending: null,
       loading: null,
@@ -163,6 +170,7 @@ export const useStore = create<State>((set) => ({
       };
     }),
   setMapColor: (p) => set((s) => ({ mapColor: { ...s.mapColor, ...p } })),
+  setIntervalColor: (intervalColor) => set({ intervalColor }),
 }));
 
 export function passesFilter(st: Station, f: StationFilter) {

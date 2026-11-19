@@ -89,7 +89,9 @@ export function SectionView() {
     const xMin = sx[0];
     const xMax = sx[sx.length - 1];
     const yMax = Math.max(...pts.y);
-    const plotBottom = Math.max(yMax, ...sb.filter(Number.isFinite)) * 1.03;
+    const deepest = Math.max(yMax, ...sb.filter(Number.isFinite));
+    // Shallow sampling over deep water (net tows, upper-ocean casts) would otherwise be squashed into a sliver.
+    const plotBottom = (deepest > yMax * 1.5 ? yMax : deepest) * 1.03;
     let zMin = Infinity;
     let zMax = -Infinity;
     for (const v of pts.z) {

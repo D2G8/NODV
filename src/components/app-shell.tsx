@@ -9,6 +9,7 @@ import {
   Loader2,
   Mountain,
   PanelLeft,
+  Ruler,
   ScatterChart,
   Table2,
   Upload,
@@ -32,6 +33,7 @@ import { Landing } from "@/components/landing";
 import { MapPanel } from "@/components/map/map-panel";
 import { Sidebar } from "@/components/sidebar";
 import { ScatterView } from "@/components/views/scatter-view";
+import { IntervalView } from "@/components/views/interval-view";
 import { SectionView } from "@/components/views/section-view";
 import { StationView } from "@/components/views/station-view";
 import { TableView } from "@/components/views/table-view";
@@ -44,6 +46,7 @@ const VIEWS: { id: ViewId; label: string; icon: typeof Waves }[] = [
   { id: "station", label: "Profiles", icon: Waves },
   { id: "scatter", label: "Scatter", icon: ScatterChart },
   { id: "section", label: "Section", icon: Mountain },
+  { id: "intervals", label: "Sampling intervals", icon: Ruler },
   { id: "table", label: "Data", icon: Table2 },
 ];
 
@@ -229,6 +232,7 @@ function Workspace() {
   const setView = useStore((s) => s.setView);
   const current = useStore((s) => s.current);
   const setCurrent = useStore((s) => s.setCurrent);
+  const hasIntervals = useStore((s) => s.dataset?.interval !== undefined);
   const stations = useFilteredStations();
 
   useEffect(() => {
@@ -257,7 +261,7 @@ function Workspace() {
         </div>
         <div className="flex h-[640px] min-h-0 flex-col overflow-hidden rounded-xl border bg-card lg:h-auto lg:min-h-[420px]">
           <nav className="flex gap-1 overflow-x-auto border-b px-2 pt-2" role="tablist" aria-label="Views">
-            {VIEWS.map((v) => (
+            {VIEWS.filter((v) => v.id !== "intervals" || hasIntervals).map((v) => (
               <button
                 key={v.id}
                 role="tab"
@@ -279,6 +283,7 @@ function Workspace() {
             {view === "station" && <StationView />}
             {view === "scatter" && <ScatterView />}
             {view === "section" && <SectionView />}
+            {view === "intervals" && <IntervalView />}
             {view === "table" && <TableView />}
           </div>
         </div>

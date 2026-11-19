@@ -14,6 +14,7 @@ function flatRows(ds: Dataset, stations: Station[], dateHeader: string) {
     "Bot. Depth [m]",
     ...ds.extraKeys,
     ...ds.variables.map((v) => v.label),
+    ...ds.noteKeys,
   ];
   const rows: Cell[][] = [];
   for (const st of stations) {
@@ -28,6 +29,7 @@ function flatRows(ds: Dataset, stations: Station[], dateHeader: string) {
         st.botDepth,
         ...ds.extraKeys.map((k) => st.extra[k] ?? ""),
         ...st.data.map((arr) => (Number.isNaN(arr[i]) ? null : round(arr[i]))),
+        ...ds.noteKeys.map((k) => st.notes[k]?.[i] ?? ""),
       ]);
     }
   }
@@ -60,7 +62,7 @@ export function exportOdvSpreadsheet(ds: Dataset, stations: Station[]) {
     "//<DataField>Ocean</DataField>",
     "//<DataType>Profiles</DataType>",
     header.join("\t"),
-    ...rows.map((r) => r.map((v) => (v === null ? "" : String(v).replace(/\t/g, " "))).join("\t")),
+    ...rows.map((r) => r.map((v) => (v === null ? "" : String(v).replace(/[\t\r\n]+/g, " "))).join("\t")),
   ];
   download(new Blob([lines.join("\n") + "\n"], { type: "text/plain;charset=utf-8" }), `${ds.name}.odv.txt`);
 }

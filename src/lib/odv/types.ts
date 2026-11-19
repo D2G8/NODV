@@ -10,6 +10,9 @@ export interface RawTable {
   comments: string[];
   sheetName?: string;
   sheetNames?: string[];
+  /** Columns that came from per-station header blocks; never treated as data variables. */
+  metaColumns?: number[];
+  notice?: string;
 }
 
 export type MetaRole =
@@ -22,7 +25,7 @@ export type MetaRole =
   | "lat"
   | "botDepth";
 
-export type ColumnRole = MetaRole | "primary" | "variable" | "metadata" | "ignore";
+export type ColumnRole = MetaRole | "primary" | "variable" | "metadata" | "note" | "ignore";
 
 export interface ColumnMapping {
   roles: ColumnRole[];
@@ -49,6 +52,8 @@ export interface Station {
   lat: number;
   botDepth: number | null;
   extra: Record<string, string>;
+  /** Per-sample text (e.g. net or bottle IDs, remarks), aligned with the sample index. */
+  notes: Record<string, string[]>;
   /** Column-major sample values: data[variableIndex][sampleIndex]. NaN = missing. */
   data: Float64Array[];
   n: number;
@@ -61,6 +66,9 @@ export interface Dataset {
   variables: Variable[];
   primaryIndex: number;
   extraKeys: string[];
+  noteKeys: string[];
+  /** Variable indices of a sampling interval's shallow and deep bounds (net tows, integrated samples). */
+  interval?: { top: number; bottom: number };
   stations: Station[];
   warnings: string[];
 }

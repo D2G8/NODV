@@ -36,10 +36,11 @@ const RULES: Rule[] = [
     role: "date",
     test: /yyyy|mon\/day\/yr|dd\/mm|mm\/dd|^date|datetime|^time ?stamp|^sampling ?date|^chron/i,
   },
-  { role: "time", test: /^(hh:mm|time|hour|utc ?time|local ?time)\b/i },
+  { role: "time", test: /^(hh:mm|time|hour|(utc|gmt|local) ?time)\b/i },
   { role: "lon", test: /^(lon|long|longitude|x_lon|lng)\b/i },
   { role: "lat", test: /^(lat|latitude|y_lat)\b/i },
-  { role: "primary", test: /^(depth|pressure|pres|press|sample ?depth|z)\b/i },
+  { role: "primary", test: /^(mid ?depth|depth|pressure|pres|press|sample ?depth|z)\b/i },
+  { role: "note", test: /remark|note|comment|observation|description|^(net|bottle|cup|niskin|tube|vial|sample ?(id|code|n[ºo°.]?)|label)\b/i },
 ];
 
 function isMostlyNumeric(rows: RawCell[][], col: number, missing: number[]) {
@@ -58,12 +59,19 @@ function isMostlyNumeric(rows: RawCell[][], col: number, missing: number[]) {
 export function detectMapping(table: RawTable): ColumnMapping {
   const missing = DEFAULT_MISSING;
   const taken = new Set<ColumnRole>();
+  const metaCols = new Set(table.metaColumns ?? []);
   const roles: ColumnRole[] = table.headers.map((header, col) => {
     const { name } = splitNameUnit(header);
     const stats = isMostlyNumeric(table.rows, col, missing);
+    const isMeta = metaCols.has(col);
     for (const rule of RULES) {
       if (!rule.test.test(name) && !rule.test.test(header)) continue;
       if (rule.role === "ignore") return "ignore";
+      if (rule.role === "note") {
+        if (isMeta) break;
+        return "note";
+      }
+      if (isMeta && rule.role === "primary") break;
       if (taken.has(rule.role)) break;
       if ((rule.role === "lon" || rule.role === "lat" || rule.role === "primary") && !stats.numeric)
         break;
@@ -71,7 +79,9 @@ export function detectMapping(table: RawTable): ColumnMapping {
       return rule.role;
     }
     if (stats.filled === 0) return "ignore";
-    return stats.numeric ? "variable" : "metadata";
+    if (isMeta) return "metadata";
+    if (stats.numeric) return "variable";
+    return table.format === "odv" ? "metadata" : "note";
   });
 
   if (!taken.has("primary")) {
@@ -106,7 +116,8 @@ export const ROLE_LABELS: Record<ColumnRole, string> = {
   botDepth: "Bottom depth",
   primary: "Depth / pressure",
   variable: "Data variable",
-  metadata: "Extra metadata",
+  metadata: "Station metadata (text)",
+  note: "Sample note / ID (text)",
   ignore: "Ignore",
 };
 
@@ -121,6 +132,7 @@ export const ROLE_ORDER: ColumnRole[] = [
   "lon",
   "lat",
   "botDepth",
+  "note",
   "metadata",
   "ignore",
 ];

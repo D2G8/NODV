@@ -55,6 +55,11 @@ export function TableView() {
                         {v.label}
                       </th>
                     ))}
+                    {dataset.noteKeys.map((k) => (
+                      <th key={k} className="px-3 py-2 text-left font-semibold whitespace-nowrap">
+                        {k}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -63,6 +68,11 @@ export function TableView() {
                       {station.data.map((arr, k) => (
                         <td key={k} className={cn("px-3 py-1 text-right", k === dataset.primaryIndex && "font-medium")}>
                           {fmt(arr[i])}
+                        </td>
+                      ))}
+                      {dataset.noteKeys.map((k) => (
+                        <td key={k} className="max-w-md px-3 py-1 text-left">
+                          {station.notes[k]?.[i]}
                         </td>
                       ))}
                     </tr>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, FileSpreadsheet } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,9 +114,15 @@ function ImportBody() {
         </DialogDescription>
       </DialogHeader>
 
+      {table.notice && (
+        <div className="flex items-start gap-2 border-b bg-sky-50 px-4 py-2 text-xs text-sky-900">
+          <Layers className="mt-0.5 size-3.5 shrink-0" />
+          {table.notice}
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-4 border-b bg-muted/30 px-4 py-3">
         {table.sheetNames && table.sheetNames.length > 1 && pending.file && (
-          <Field label="Worksheet" className="w-48">
+          <Field label="Worksheet" className="w-56">
             <SimpleSelect
               value={table.sheetName ?? null}
               onChange={(name) => openFile(pending.file!, { sheetName: name })}
