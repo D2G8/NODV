@@ -3,7 +3,8 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { buildDataset } from "./odv/build";
-import { detectMapping, validateMapping } from "./odv/detect";
+import { applyEdits } from "./odv/columns";
+import { detectMapping, suggestEdits, validateMapping } from "./odv/detect";
 import { readFile } from "./odv/read";
 import type { ImportSettings } from "./library";
 import { useStore } from "./store";
@@ -33,22 +34,26 @@ export function useImporter() {
         const table = await readFile(file, opts.saved?.settings.sheetName ?? opts.sheetName);
         if (table.rows.length === 0) throw new Error("No data rows were found below the header row.");
         const savedSettings = opts.saved?.settings;
-        const reuse =
+        const sameFile =
           savedSettings &&
           savedSettings.headers.length === table.headers.length &&
           savedSettings.headers.every((h, i) => h === table.headers[i]);
-        const mapping = reuse ? savedSettings.mapping : detectMapping(table);
+        const edits = sameFile ? (savedSettings.edits ?? []) : suggestEdits(table);
+        const { table: edited, problems } = applyEdits(table, edits);
+        const reuse =
+          sameFile && Object.keys(problems).length === 0 && savedSettings.mapping.roles.length === edited.headers.length;
+        const mapping = reuse ? savedSettings.mapping : detectMapping(edited);
         if ((opts.skipDialog || reuse) && validateMapping(mapping).length === 0) {
-          const ds = buildDataset(table, mapping);
+          const ds = buildDataset(edited, mapping);
           if (ds.stations.length === 0) throw new Error("No stations with valid positions were found.");
           setDataset(ds, {
             file,
-            settings: { sheetName: table.sheetName, headers: table.headers, mapping },
+            settings: { sheetName: table.sheetName, headers: table.headers, edits, mapping },
             savedId: opts.saved?.id ?? null,
           });
           toast.success(`Loaded ${ds.stations.length} stations from ${file.name}`);
         } else {
-          setPending({ table, mapping, file, savedId: opts.saved?.id ?? null });
+          setPending({ table, edits, mapping, file, savedId: opts.saved?.id ?? null });
         }
       } catch (err) {
         toast.error(`Couldn’t read ${file.name}`, { description: err instanceof Error ? err.message : String(err) });

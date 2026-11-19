@@ -1,3 +1,4 @@
+import { type ColumnEdit, editId, parseRange, suggestMergeName } from "./columns";
 import type { ColumnMapping, ColumnRole, RawCell, RawTable } from "./types";
 
 export const DEFAULT_MISSING = [-999, -9999, -99, -99.99, -999.9, 1e10, -1e10];
@@ -60,6 +61,35 @@ function isMostlyNumeric(rows: RawCell[][], col: number, missing: number[]) {
   return { filled, numeric: filled > 0 && numeric / filled >= 0.8 };
 }
 
+const INTERVAL_HEADER = /depth|interval|layer|range|stratum|pressure|\bz\b/i;
+
+function mostlyRanges(rows: RawCell[][], col: number) {
+  let filled = 0;
+  let ranges = 0;
+  for (let i = 0; i < Math.min(rows.length, 400); i++) {
+    const v = rows[i][col];
+    if (v === null) continue;
+    filled++;
+    if (parseRange(v)) ranges++;
+  }
+  return filled > 0 && ranges / filled >= 0.6;
+}
+
+/**
+ * Proposes column edits that make a table easier to read, such as joining a pair of depth-limit
+ * columns ("From bottom" / "From top") into one depth-interval column.
+ */
+export function suggestEdits(table: RawTable): ColumnEdit[] {
+  const { roles } = detectMapping(table);
+  const top = roles.indexOf("intervalTop");
+  const bottom = roles.indexOf("intervalBottom");
+  if (top < 0 || bottom < 0 || roles.includes("interval")) return [];
+  const columns = [Math.min(top, bottom), Math.max(top, bottom)].map((c) => table.headers[c]);
+  const base = suggestMergeName(columns);
+  const name = table.headers.includes(base) ? `${base} (merged)` : base;
+  return [{ id: editId(), op: "merge", columns, name, how: "interval" }];
+}
+
 function columnMean(rows: RawCell[][], col: number, missing: number[]) {
   let sum = 0;
   let n = 0;
@@ -82,6 +112,10 @@ export function detectMapping(table: RawTable): ColumnMapping {
     const { name } = splitNameUnit(header);
     const stats = isMostlyNumeric(table.rows, col, missing);
     const isMeta = metaCols.has(col);
+    if (!isMeta && !taken.has("interval") && INTERVAL_HEADER.test(header) && mostlyRanges(table.rows, col)) {
+      taken.add("interval");
+      return "interval";
+    }
     for (const rule of RULES) {
       if (!rule.test.test(name) && !rule.test.test(header)) continue;
       if (rule.role === "ignore") return "ignore";
@@ -114,7 +148,8 @@ export function detectMapping(table: RawTable): ColumnMapping {
     roles[deeperIsB ? b : a] = "intervalBottom";
   }
 
-  if (!taken.has("primary")) {
+  const hasInterval = roles.includes("interval") || roles.includes("intervalTop");
+  if (!taken.has("primary") && !hasInterval) {
     const i = roles.findIndex((r) => r === "variable");
     if (i >= 0) roles[i] = "primary";
   }
@@ -127,13 +162,16 @@ export function validateMapping(mapping: ColumnMapping): string[] {
   const has = (r: ColumnRole) => mapping.roles.includes(r);
   if (!has("lon")) errs.push("Choose a longitude column.");
   if (!has("lat")) errs.push("Choose a latitude column.");
-  if (!has("primary")) errs.push("Choose a depth or pressure column (the primary variable).");
+  if (!has("primary") && !has("interval") && !(has("intervalTop") && has("intervalBottom")))
+    errs.push("Choose a depth or pressure column, or a depth-interval column.");
   for (const r of UNIQUE_ROLES) {
     if (mapping.roles.filter((x) => x === r).length > 1)
       errs.push(`Only one column can be "${ROLE_LABELS[r]}".`);
   }
   if (has("intervalTop") !== has("intervalBottom"))
     errs.push("Sampling intervals need both a shallow-limit and a deep-limit column.");
+  if (has("interval") && has("intervalTop"))
+    errs.push("Use either one depth-interval column or a pair of shallow/deep limit columns, not both.");
   return errs;
 }
 
@@ -147,6 +185,7 @@ export const UNIQUE_ROLES: ColumnRole[] = [
   "lat",
   "botDepth",
   "primary",
+  "interval",
   "intervalTop",
   "intervalBottom",
 ];
@@ -162,6 +201,7 @@ export const ROLE_LABELS: Record<ColumnRole, string> = {
   botDepth: "Bottom depth",
   primary: "Depth / pressure",
   variable: "Data variable",
+  interval: "Depth interval (from–to)",
   intervalTop: "Interval: shallow limit",
   intervalBottom: "Interval: deep limit",
   metadata: "Station metadata (text)",
@@ -172,6 +212,7 @@ export const ROLE_LABELS: Record<ColumnRole, string> = {
 export const ROLE_ORDER: ColumnRole[] = [
   "variable",
   "primary",
+  "interval",
   "intervalTop",
   "intervalBottom",
   "cruise",

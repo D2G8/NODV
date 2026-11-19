@@ -185,7 +185,13 @@ export function summarise(ds: Built): FileSummary {
     label: "Measured",
     value: measured.length ? listText(measured.map((i) => ds.variables[i].label), 6) : "Nothing yet (sampling log)",
   });
-  if (interval) facts.push({ label: "Intervals", value: `${ds.variables[interval.top].name} → ${ds.variables[interval.bottom].name}` });
+  if (interval) {
+    const merged = ds.columns.find((c) => c.kind === "interval");
+    facts.push({
+      label: "Intervals",
+      value: merged ? merged.label : `${ds.variables[interval.bottom].name} → ${ds.variables[interval.top].name}`,
+    });
+  }
   if (idKeys.length) facts.push({ label: "Sample IDs", value: idKeys.join(", ") });
   const otherMeta = ds.extraKeys.filter((k) => k !== vesselKey);
   if (otherMeta.length) facts.push({ label: "Also logged", value: listText(otherMeta, 5) });

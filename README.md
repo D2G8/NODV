@@ -19,6 +19,13 @@ Everything runs client-side: files are parsed in the browser and never uploaded.
     available from the sidebar after import, and tables keep the file's own row and column order.
   - A review dialog lets you correct any column role, pick a worksheet, set missing-value codes (for
     example `-999`), and choose day-first dates.
+  - Column editing before import: merge two or more columns into one (as a depth interval such as
+    `700–500`, or by mean, sum, min, max, first value, or joined text), add a column holding a fixed value
+    or a formula such as `=[Bottom depth] / 1000`, and rename or delete columns. Separate "from" and "to"
+    depth columns are merged into one depth-interval column automatically. Every edit is listed and can
+    be changed or undone, and edits are saved with the file in the library.
+  - Two-row headers (for example "Depth interval" over "From" / "To") and merged header cells are read
+    as one header per column.
   - Follows ODV conventions: blank metadata cells continue the station above. It also accepts spreadsheets
     where every row repeats the metadata, title rows above the header, Excel date serials, and separate
     date and time columns.

@@ -14,7 +14,8 @@ interface StationSheet {
   rows: RawCell[][];
 }
 
-function sheetMatrix(wb: WorkBook, name: string, XLSX: XLSXModule, normalise: (v: unknown) => RawCell) {
+/** A sheet as rows of cells, with merged cells' value copied into every cell they cover. */
+export function sheetMatrix(wb: WorkBook, name: string, XLSX: XLSXModule, normalise: (v: unknown) => RawCell) {
   const ws = wb.Sheets[name];
   if (!ws["!ref"]) return [];
   const range = XLSX.utils.decode_range(ws["!ref"]);
@@ -93,8 +94,17 @@ export function findStationSheets(wb: WorkBook, XLSX: XLSXModule, normalise: (v:
   return found;
 }
 
-/** Joins station sheets into one flat table: one column per metadata label, then the sample columns. */
-export function combineStationSheets(sheets: StationSheet[], fileName: string, allSheetNames: string[]): RawTable {
+/**
+ * Joins station sheets into one flat table: one column per metadata label, then the sample columns.
+ * `siblings` are the workbook's other station sheets; a column left unnamed on the chosen sheets
+ * borrows the name used at the same position on a sibling with the same layout.
+ */
+export function combineStationSheets(
+  sheets: StationSheet[],
+  fileName: string,
+  allSheetNames: string[],
+  siblings: StationSheet[] = sheets,
+): RawTable {
   const metaKeys: string[] = [];
   for (const s of sheets) for (const [k] of s.meta) if (!metaKeys.includes(k)) metaKeys.push(k);
 
@@ -104,9 +114,12 @@ export function combineStationSheets(sheets: StationSheet[], fileName: string, a
   let dataHeaders: string[];
   let columnOf: (s: StationSheet, c: number) => number;
   if (sameWidth) {
+    const width = sheets[0].headers.length;
+    const lookalikes = siblings.filter((s) => s.headers.length === width);
     dataHeaders = sheets[0].headers.map((_, c) => {
       const names = [...new Set(sheets.map((s) => s.headers[c]).filter(Boolean))];
-      return names.join(" / ") || `Column ${c + 1}`;
+      const borrowed = lookalikes.map((s) => s.headers[c]).find(Boolean);
+      return names.join(" / ") || borrowed || `Column ${c + 1}`;
     });
     columnOf = (_s, c) => c;
   } else {

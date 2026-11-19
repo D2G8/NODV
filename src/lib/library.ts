@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { ColumnEdit } from "./odv/columns";
 import type { ColumnMapping, Dataset } from "./odv/types";
 
 // Publishable keys are designed to ship to browsers; access is governed by row-level security.
@@ -14,7 +15,10 @@ export const SUPABASE_SQL_EDITOR_URL = `https://supabase.com/dashboard/project/$
 
 export interface ImportSettings {
   sheetName?: string;
+  /** Headers as read from the file, before any column edits. */
   headers: string[];
+  edits?: ColumnEdit[];
+  /** Roles for the columns after edits. */
   mapping: ColumnMapping;
 }
 

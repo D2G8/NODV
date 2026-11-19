@@ -1,4 +1,4 @@
-import { ALL_STATION_SHEETS, combineStationSheets, findStationSheets } from "./station-sheets";
+import { ALL_STATION_SHEETS, combineStationSheets, findStationSheets, sheetMatrix } from "./station-sheets";
 import type { RawCell, RawTable, SourceFormat } from "./types";
 
 const EXCEL_EXT = /\.(xlsx|xlsm|xlsb|xls|ods)$/i;
@@ -30,62 +30,18 @@ export async function readExcel(
   const single = stationSheets.find((s) => s.name === sheetName);
   if (stationSheets.length > 0 && (!sheetName || sheetName === ALL_STATION_SHEETS || single)) {
     const chosenSheets = single ? [single] : stationSheets;
-    const table = combineStationSheets(chosenSheets, fileName, single ? [single.name] : sheetNames);
-    return addIntervalMidpoint({
+    const table = combineStationSheets(chosenSheets, fileName, single ? [single.name] : sheetNames, stationSheets);
+    return {
       ...table,
       sheetName: single ? single.name : stationSheets.length > 1 ? ALL_STATION_SHEETS : stationSheets[0].name,
       sheetNames: listed,
-    });
+    };
   }
 
   const chosen =
     sheetName && sheetNames.includes(sheetName) ? sheetName : pickBestSheet(wb, XLSX);
-  const ws = wb.Sheets[chosen];
-  const matrix = XLSX.utils.sheet_to_json<RawCell[]>(ws, {
-    header: 1,
-    raw: true,
-    defval: null,
-    blankrows: false,
-  });
-  const table = matrixToTable(
-    matrix.map((r) => r.map(normaliseCell)),
-    fileName,
-    "excel",
-  );
-  return addIntervalMidpoint({ ...table, sheetName: chosen, sheetNames: listed });
-}
-
-const INTERVAL_WORD = /\b(from|to|top|bottom|min|max|start|end|upper|lower|shallow|deep)\b/i;
-
-/**
- * Net tows and other depth-integrated samples record a depth interval rather than a depth.
- * When a table has two such bound columns and no plain depth column, add their midpoint so
- * samples can be placed on a depth axis.
- */
-export function addIntervalMidpoint(table: RawTable): RawTable {
-  const metaCols = new Set(table.metaColumns ?? []);
-  const isDepthish = (h: string) => /depth|pressure|\bz\b/i.test(h) && !/bot\.?|bottom depth|water depth|sea ?floor/i.test(h.replace(/from bottom|to bottom/i, ""));
-  const candidates = table.headers
-    .map((h, c) => ({ h, c }))
-    .filter(({ h, c }) => !metaCols.has(c) && isDepthish(h));
-  const plain = candidates.filter(({ h }) => !INTERVAL_WORD.test(h));
-  const bounds = candidates.filter(({ h }) => INTERVAL_WORD.test(h));
-  if (plain.length > 0 || bounds.length !== 2) return table;
-  const [a, b] = bounds.map((x) => x.c);
-  const num = (v: RawCell) => (typeof v === "number" ? v : v === null ? NaN : Number(String(v).replace(",", ".")));
-  const at = Math.min(a, b);
-  const unit = table.headers[a].match(/\[([^\]]+)\]/)?.[1] ?? "m";
-  return {
-    ...table,
-    headers: [...table.headers.slice(0, at), `Mid depth [${unit}]`, ...table.headers.slice(at)],
-    rows: table.rows.map((r) => {
-      const x = num(r[a]);
-      const y = num(r[b]);
-      const mid = Number.isFinite(x) && Number.isFinite(y) ? (x + y) / 2 : null;
-      return [...r.slice(0, at), mid, ...r.slice(at)];
-    }),
-    metaColumns: table.metaColumns?.map((c) => (c >= at ? c + 1 : c)),
-  };
+  const table = matrixToTable(sheetMatrix(wb, chosen, XLSX, normaliseCell), fileName, "excel");
+  return { ...table, sheetName: chosen, sheetNames: listed };
 }
 
 function pickBestSheet(
@@ -131,7 +87,7 @@ export function readText(text: string, fileName: string): RawTable {
   const delimiter = detectDelimiter(body.slice(0, 20));
   const matrix = body.map((l) => splitLine(l, delimiter).map(normaliseCell));
   const format: SourceFormat = isOdv && delimiter === "\t" ? "odv" : "csv";
-  return addIntervalMidpoint({ ...matrixToTable(matrix, fileName, format), comments });
+  return { ...matrixToTable(matrix, fileName, format), comments };
 }
 
 function detectDelimiter(sample: string[]): string {
@@ -177,20 +133,38 @@ function splitLine(line: string, delimiter: string): string[] {
   return out;
 }
 
-/** Finds the header row (skipping title rows that spreadsheets often have) and pads rows. */
+const isTextCell = (v: RawCell) => typeof v === "string" && Number.isNaN(Number(v));
+
+/**
+ * Finds the header row (skipping title rows that spreadsheets often have), joins a second header
+ * row such as "Depth interval" over "From bottom | From top", and pads rows. A sheet whose first
+ * row is already data gets numbered column names.
+ */
 function matrixToTable(
   matrix: RawCell[][],
   fileName: string,
   format: SourceFormat,
 ): RawTable {
   const headerRow = findHeaderRow(matrix);
-  const rawHeaders = matrix[headerRow] ?? [];
-  const rows = matrix.slice(headerRow + 1);
-  const width = Math.max(rawHeaders.length, ...rows.slice(0, 500).map((r) => r.length));
+  const top = headerRow >= 0 ? matrix[headerRow] : [];
+  const next = headerRow >= 0 ? matrix[headerRow + 1] : undefined;
+  const afterNext = matrix[headerRow + 2];
+  const subHeader =
+    next !== undefined &&
+    next.some(isTextCell) &&
+    next.every((v) => v === null || isTextCell(v)) &&
+    countFilled(next) < countFilled(top) + 1 &&
+    afterNext !== undefined &&
+    afterNext.some((v) => typeof v === "number" || (v !== null && !isTextCell(v)));
+  const rows = matrix.slice(headerRow + (subHeader ? 2 : 1));
+  const width = Math.max(top.length, subHeader ? next.length : 0, ...rows.slice(0, 500).map((r) => r.length));
   const seen = new Map<string, number>();
   const headers: string[] = [];
   for (let c = 0; c < width; c++) {
-    let h = rawHeaders[c] == null ? "" : String(rawHeaders[c]).trim();
+    const parts = [top[c], subHeader ? next[c] : null]
+      .filter((v): v is string | number => v !== null && v !== undefined && String(v).trim() !== "")
+      .map((v) => String(v).trim());
+    let h = [...new Set(parts)].join(" ");
     if (h === "") h = `Column ${c + 1}`;
     const count = seen.get(h) ?? 0;
     seen.set(h, count + 1);
@@ -213,10 +187,13 @@ function findHeaderRow(matrix: RawCell[][]): number {
   for (let i = 0; i < limit; i++) {
     const row = matrix[i];
     const filled = countFilled(row);
-    const textCells = row.filter((v) => typeof v === "string" && isNaN(Number(v))).length;
-    if (filled >= Math.max(2, widest * 0.6) && textCells >= filled * 0.6) return i;
+    const textCells = row.filter(isTextCell).length;
+    // A title in a cell merged across the sheet repeats one value in every column; it isn't a header.
+    const distinct = new Set(row.filter((v) => v !== null && v !== "")).size;
+    if (filled >= Math.max(2, widest * 0.6) && textCells >= filled * 0.6 && distinct >= Math.max(2, filled * 0.5)) return i;
   }
-  return 0;
+  const first = matrix[0] ?? [];
+  return first.length > 0 && first.filter(isTextCell).length === 0 ? -1 : 0;
 }
 
 function countFilled(row: RawCell[]) {

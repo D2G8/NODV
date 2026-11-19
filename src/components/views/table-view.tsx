@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/odv/dates";
+import type { Dataset } from "@/lib/odv/types";
 import { useFilteredStations, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { EmptyPlot, ViewToolbar } from "./view-chrome";
@@ -14,6 +15,14 @@ function fmt(v: number) {
   const a = Math.abs(v);
   if (a !== 0 && (a < 0.001 || a >= 1e6)) return v.toExponential(3);
   return String(Math.round(v * 10000) / 10000);
+}
+
+function intervalText(data: Float64Array[], interval: Dataset["interval"], deepFirst: boolean, i: number) {
+  if (!interval) return "";
+  const top = fmt(data[interval.top][i]);
+  const bottom = fmt(data[interval.bottom][i]);
+  if (!top && !bottom) return "";
+  return deepFirst ? `${bottom}–${top}` : `${top}–${bottom}`;
 }
 
 export function TableView() {
@@ -56,6 +65,10 @@ export function TableView() {
                         <th key={`v${c.index}`} className="px-3 py-2 text-right font-semibold whitespace-nowrap">
                           {dataset.variables[c.index].label}
                         </th>
+                      ) : c.kind === "interval" ? (
+                        <th key="interval" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                          {c.label}
+                        </th>
                       ) : (
                         <th key={`n${c.key}`} className="px-3 py-2 text-left font-semibold whitespace-nowrap">
                           {c.key}
@@ -74,6 +87,10 @@ export function TableView() {
                             className={cn("px-3 py-1 text-right", c.index === dataset.primaryIndex && "font-medium")}
                           >
                             {fmt(station.data[c.index][i])}
+                          </td>
+                        ) : c.kind === "interval" ? (
+                          <td key="interval" className="px-3 py-1 text-right whitespace-nowrap">
+                            {intervalText(station.data, dataset.interval, c.deepFirst, i)}
                           </td>
                         ) : (
                           <td key={`n${c.key}`} className="max-w-md px-3 py-1 text-left">

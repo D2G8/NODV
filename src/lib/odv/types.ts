@@ -29,6 +29,7 @@ export type ColumnRole =
   | MetaRole
   | "primary"
   | "variable"
+  | "interval"
   | "intervalTop"
   | "intervalBottom"
   | "metadata"
@@ -72,7 +73,11 @@ export interface Station {
 }
 
 /** A dataset column in source-file order: a numeric variable or a per-sample text column. */
-export type DatasetColumn = { kind: "variable"; index: number } | { kind: "note"; key: string };
+export type DatasetColumn =
+  | { kind: "variable"; index: number }
+  | { kind: "note"; key: string }
+  /** A depth-interval column from the file, shown as one "from–to" value. */
+  | { kind: "interval"; label: string; deepFirst: boolean };
 
 export interface SummaryCheck {
   level: "warning" | "info";

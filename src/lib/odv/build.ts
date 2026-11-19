@@ -1,4 +1,5 @@
 import { parseDateCell, parseTimeCell } from "./dates";
+import { parseRange } from "./columns";
 import { parseNumber, splitNameUnit } from "./detect";
 import { summarise } from "./interpret";
 
@@ -43,8 +44,75 @@ interface PendingStation {
 
 const NUMERIC_ROLES = new Set<ColumnRole>(["primary", "variable", "intervalTop", "intervalBottom"]);
 
-export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
-  const { roles, missingValues, dayFirst } = mapping;
+/** How a single depth-interval column from the file is shown again in tables. */
+interface IntervalDisplay {
+  label: string;
+  deepFirst: boolean;
+}
+
+function cellRange(v: RawCell, missing: number[]): [number, number] | null {
+  const r = parseRange(v);
+  if (r) return r;
+  const n = parseNumber(v, missing);
+  return Number.isNaN(n) ? null : [n, n];
+}
+
+/**
+ * Splits a single depth-interval column ("700–500") into shallow and deep limits, and adds a
+ * mid-depth column as the depth axis when intervals are the only depth information.
+ */
+function prepareIntervals(table: RawTable, roles: ColumnRole[], missing: number[]) {
+  let headers = [...table.headers];
+  let rows = table.rows;
+  let r = [...roles];
+  let meta = headers.map((_, i) => (table.metaColumns ?? []).includes(i));
+  let display: IntervalDisplay | undefined;
+  const insertAt = <T,>(arr: T[], at: number, values: T[], replace: number) => [
+    ...arr.slice(0, at),
+    ...values,
+    ...arr.slice(at + replace),
+  ];
+
+  const ic = r.indexOf("interval");
+  if (ic >= 0) {
+    const { name, unit } = splitNameUnit(headers[ic]);
+    const u = unit || "m";
+    const pairs = rows.map((row) => cellRange(row[ic], missing));
+    let order = 0;
+    for (const p of pairs) if (p && p[0] !== p[1]) order += p[0] > p[1] ? 1 : -1;
+    display = { label: table.headers[ic], deepFirst: order >= 0 };
+    headers = insertAt(headers, ic, [`${name} – shallow limit [${u}]`, `${name} – deep limit [${u}]`], 1);
+    rows = rows.map((row, k) => {
+      const p = pairs[k];
+      return insertAt(row, ic, p ? [Math.min(...p), Math.max(...p)] : [null, null], 1);
+    });
+    r = insertAt(r, ic, ["intervalTop", "intervalBottom"], 1);
+    meta = insertAt(meta, ic, [false, false], 1);
+  }
+
+  const top = r.indexOf("intervalTop");
+  const bottom = r.indexOf("intervalBottom");
+  if (!r.includes("primary") && top >= 0 && bottom >= 0) {
+    const at = Math.min(top, bottom);
+    const unit = splitNameUnit(headers[top]).unit || "m";
+    headers = insertAt(headers, at, [`Mid depth [${unit}]`], 0);
+    rows = rows.map((row) => {
+      const a = parseNumber(row[top], missing);
+      const b = parseNumber(row[bottom], missing);
+      return insertAt(row, at, [Number.isNaN(a) || Number.isNaN(b) ? null : (a + b) / 2], 0);
+    });
+    r = insertAt(r, at, ["primary"], 0);
+    meta = insertAt(meta, at, [false], 0);
+  }
+
+  const metaColumns = meta.map((m, i) => (m ? i : -1)).filter((i) => i >= 0);
+  return { table: { ...table, headers, rows, metaColumns }, roles: r, display };
+}
+
+export function buildDataset(source: RawTable, mapping: ColumnMapping): Dataset {
+  const { missingValues, dayFirst } = mapping;
+  const prepared = prepareIntervals(source, mapping.roles, missingValues);
+  const { table, roles } = prepared;
   const col = (r: MetaRole | "primary") => roles.indexOf(r);
   const metaCols = Object.fromEntries(META_ROLES.map((r) => [r, col(r)])) as Record<MetaRole, number>;
   const primaryCol = col("primary");
@@ -65,7 +133,10 @@ export function buildDataset(table: RawTable, mapping: ColumnMapping): Dataset {
   const noteKeys = noteCols.map((c) => table.headers[c]);
   const columns: DatasetColumn[] = [];
   roles.forEach((r, c) => {
-    if (NUMERIC_ROLES.has(r)) columns.push({ kind: "variable", index: varCols.indexOf(c) });
+    const isLimit = r === "intervalTop" || r === "intervalBottom";
+    if (isLimit && prepared.display) {
+      if (!columns.some((x) => x.kind === "interval")) columns.push({ kind: "interval", ...prepared.display });
+    } else if (NUMERIC_ROLES.has(r)) columns.push({ kind: "variable", index: varCols.indexOf(c) });
     else if (r === "note") columns.push({ kind: "note", key: table.headers[c] });
   });
   let rowOrder = 0;

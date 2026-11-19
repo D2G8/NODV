@@ -6,6 +6,7 @@ import { guessSalinity, guessTemperature } from "./odv/derived";
 import { measuredIndices } from "./odv/interpret";
 import type { ImportSettings } from "./library";
 import type { ColorScaleId } from "./odv/colormaps";
+import type { ColumnEdit } from "./odv/columns";
 import type { ColumnMapping, Dataset, RawTable, Station } from "./odv/types";
 
 export type ViewId = "station" | "scatter" | "section" | "intervals" | "table";
@@ -19,7 +20,10 @@ export interface StationFilter {
 }
 
 export interface PendingImport {
+  /** The table as read from the file, before column edits. */
   table: RawTable;
+  edits: ColumnEdit[];
+  /** Roles for the columns after edits. */
   mapping: ColumnMapping;
   file: File | null;
   savedId?: string | null;
